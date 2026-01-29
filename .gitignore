@@ -37,5 +37,9 @@
 *.out
 *.app
 
+# Build artifacts
+/build/
+/output/
+
 # debug information files
 *.dwo
