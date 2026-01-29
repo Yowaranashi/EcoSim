@@ -1,0 +1,12 @@
+mode = "headless"
+error_policy = "fail-fast"
+modules_dir = "modules"
+scenario_path = "scenario.toml"
+output_dir = "output"
+dt = 1.0
+max_ticks = 3
+instances = [
+  { type = "simulation_world", id = "default", enable = true },
+  { type = "scenario", id = "default", enable = true },
+  { type = "recorder", id = "csv", enable = true, params = { sink = "memory" } }
+]
