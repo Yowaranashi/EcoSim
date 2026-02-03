@@ -35,6 +35,10 @@ add_test(NAME ecosim_integration_tests COMMAND ecosim_tests)
 include(GNUInstallDirs)
 include(InstallRequiredSystemLibraries)
 
+if(CMAKE_CONFIGURATION_TYPES)
+    message(STATUS "Multi-config generator detected; use --config <cfg> for ctest and install (e.g. Debug).")
+endif()
+
 install(TARGETS ecosim
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
