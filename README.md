@@ -30,6 +30,38 @@ cmake --build build
 ctest --test-dir build
 ```
 
+Для генераторов с несколькими конфигурациями (Visual Studio/MSBuild):
+
+```bash
+cmake --build build --config Debug
+ctest --test-dir build -C Debug
+```
+
+## Установка и упаковка
+
+Установка в директорию (переносит бинарник и данные в дерево установки):
+
+```bash
+cmake -S . -B build
+cmake --build build
+cmake --install build --prefix install
+```
+
+Для Visual Studio/MSBuild нужно указать конфигурацию, совпадающую с билдом:
+
+```bash
+cmake --build build --config Debug
+cmake --install build --prefix install --config Debug
+```
+
+Упаковка (ZIP/TGZ с бинарником, конфигами, модулями и документацией):
+
+```bash
+cmake -S . -B build
+cmake --build build
+cmake --build build --target package
+```
+
 ## Команды консоли
 
 Команды регистрируются в `Application::registerCoreCommands` и доступны для выполнения через консольный интерфейс:
