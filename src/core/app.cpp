@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <iostream>
 #include <memory>
 
 namespace ecosim {
@@ -106,6 +107,20 @@ void Application::runHeadless() {
     }
 }
 
+void Application::runConsoleLoop() {
+    console_running_ = true;
+    logger_.log(LogChannel::System, "Console ready. Type a command or sys.quit to exit.");
+    std::string line;
+    while (console_running_ && std::getline(std::cin, line)) {
+        if (line.empty()) {
+            continue;
+        }
+        if (!console_.execute(line)) {
+            logger_.log(LogChannel::System, "Unknown command: " + line);
+        }
+    }
+}
+
 void Application::shutdown() {
     module_manager_.stopModules();
 }
@@ -136,6 +151,7 @@ void Application::registerCoreCommands() {
     });
     console_.registerCommand("sys.quit", [this](const std::vector<std::string> &) {
         running_ = false;
+        console_running_ = false;
         logger_.log(LogChannel::System, "sys.quit received");
     });
 }

@@ -21,7 +21,15 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    app.runHeadless();
+    const auto &mode = app.config().mode;
+    if (mode == "console") {
+        app.runConsoleLoop();
+    } else if (mode == "headless") {
+        app.runHeadless();
+    } else {
+        logger.log(ecosim::LogChannel::System, "Unknown mode '" + mode + "', falling back to headless");
+        app.runHeadless();
+    }
     app.shutdown();
     return 0;
 }
