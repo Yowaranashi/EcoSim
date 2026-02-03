@@ -18,6 +18,7 @@ public:
     bool initialize(const std::string &config_path);
     bool startModules();
     void runHeadless();
+    void runConsoleLoop();
     void shutdown();
 
     ModuleManager &moduleManager() { return module_manager_; }
@@ -37,6 +38,7 @@ private:
     ModuleManager module_manager_;
     Console console_;
     bool running_ = false;
+    bool console_running_ = false;
 };
 
 } // namespace ecosim
