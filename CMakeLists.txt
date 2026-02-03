@@ -31,3 +31,42 @@ target_link_libraries(ecosim_tests PRIVATE ecosim_core)
 target_compile_definitions(ecosim_tests PRIVATE ECOSIM_SOURCE_DIR=\"${CMAKE_SOURCE_DIR}\")
 
 add_test(NAME ecosim_integration_tests COMMAND ecosim_tests)
+
+include(GNUInstallDirs)
+include(InstallRequiredSystemLibraries)
+
+if(CMAKE_CONFIGURATION_TYPES)
+    message(STATUS "Multi-config generator detected; use --config <cfg> for ctest and install (e.g. Debug).")
+endif()
+
+install(TARGETS ecosim
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(DIRECTORY configs/
+    DESTINATION ${CMAKE_INSTALL_BINDIR}/configs
+)
+
+install(DIRECTORY modules/
+    DESTINATION ${CMAKE_INSTALL_BINDIR}/modules
+)
+
+install(DIRECTORY docs/
+    DESTINATION ${CMAKE_INSTALL_BINDIR}/docs
+    OPTIONAL
+)
+
+install(FILES README.md LICENSE
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+set(CPACK_PACKAGE_NAME "EcoSim")
+set(CPACK_PACKAGE_VENDOR "EcoSim")
+set(CPACK_PACKAGE_VERSION "0.1.0")
+set(CPACK_PACKAGE_CONTACT "ecosim@example.com")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "EcoSim headless simulation prototype")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
+set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
+set(CPACK_GENERATOR "ZIP;TGZ")
+set(CPACK_PACKAGE_FILE_NAME "EcoSim-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}")
+include(CPack)

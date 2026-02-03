@@ -21,7 +21,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    app.runHeadless();
+    app.runConsoleLoop();
     app.shutdown();
     return 0;
 }
