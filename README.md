@@ -30,6 +30,24 @@ cmake --build build
 ctest --test-dir build
 ```
 
+## Установка и упаковка
+
+Установка в директорию (переносит бинарник и данные в дерево установки):
+
+```bash
+cmake -S . -B build
+cmake --build build
+cmake --install build --prefix install
+```
+
+Упаковка (ZIP/TGZ с бинарником, конфигами, модулями и документацией):
+
+```bash
+cmake -S . -B build
+cmake --build build
+cmake --build build --target package
+```
+
 ## Команды консоли
 
 Команды регистрируются в `Application::registerCoreCommands` и доступны для выполнения через консольный интерфейс:
