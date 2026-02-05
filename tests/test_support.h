@@ -47,7 +47,8 @@ inline std::string sourcePath(const std::string &relative) {
 }
 
 inline std::string writeTestConfig() {
-    std::filesystem::path config_dir = safeCurrentPath();
+    auto repo_root = locateRepoRoot();
+    std::filesystem::path config_dir = !repo_root.empty() ? repo_root : safeCurrentPath();
     if (config_dir.empty()) {
         std::error_code error;
         config_dir = std::filesystem::temp_directory_path(error);
@@ -66,8 +67,11 @@ inline std::string writeTestConfig() {
             config_file.open(config_path, std::ios::out | std::ios::trunc);
         }
     }
-    auto modules_dir = normalizePath(sourcePath("modules"));
-    auto scenario_path = normalizePath(sourcePath("tests/data/scenario.toml"));
+    auto modules_dir = normalizePath(
+        (!repo_root.empty() ? (repo_root / "modules") : std::filesystem::path("modules")).string());
+    auto scenario_path = normalizePath(
+        (!repo_root.empty() ? (repo_root / "tests/data/scenario.toml") : std::filesystem::path("tests/data/scenario.toml"))
+            .string());
     auto output_dir = normalizePath((config_dir / "test_output").string());
     config_file << "mode = \"headless\"\n";
     config_file << "error_policy = \"fail-fast\"\n";
