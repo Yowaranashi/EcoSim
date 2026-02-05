@@ -16,6 +16,7 @@ struct ModuleManifest {
     std::string version;
     std::vector<std::string> dependencies;
     Criticality criticality = Criticality::Optional;
+    std::string library_path;
 };
 
 struct ModuleInstanceConfig {

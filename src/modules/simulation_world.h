@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/module.h"
+#include "modules/world_port.h"
 
 #include <map>
 #include <string>
@@ -8,14 +9,7 @@
 
 namespace ecosim {
 
-struct ReadModel {
-    int tick = 0;
-    int seed = 0;
-    std::map<std::string, int> population_by_species;
-    int energy_total = 0;
-};
-
-class SimulationWorld : public IModule {
+class SimulationWorld : public IModule, public IWorldPort {
 public:
     SimulationWorld(const ModuleInstanceConfig &instance, ModuleContext &context);
 
@@ -26,10 +20,11 @@ public:
     void onPreTick() override;
     void onTick() override;
 
-    void enqueueCommand(const std::string &command, const std::map<std::string, std::string> &params);
+    void enqueueCommand(const std::string &command,
+                        const std::map<std::string, std::string> &params) override;
 
-    const ReadModel &readModel() const { return read_model_; }
-    bool shouldStop() const;
+    const ReadModel &readModel() const override { return read_model_; }
+    bool shouldStop() const override;
     std::string checksum() const;
 
 private:
