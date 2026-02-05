@@ -33,12 +33,25 @@ std::string normalizePath(const std::string &path) {
     return std::filesystem::path(path).generic_string();
 }
 
+std::filesystem::path locateRepoRoot() {
+    std::filesystem::path current = std::filesystem::current_path();
+    for (int depth = 0; depth < 6; ++depth) {
+        auto modules_manifest = current / "modules" / "recorder" / "manifest.toml";
+        auto scenario_path = current / "tests" / "data" / "scenario.toml";
+        if (std::filesystem::exists(modules_manifest) && std::filesystem::exists(scenario_path)) {
+            return current;
+        }
+        if (!current.has_parent_path()) {
+            break;
+        }
+        current = current.parent_path();
+    }
+    return std::filesystem::current_path();
+}
+
 std::string sourcePath(const std::string &relative) {
-#ifdef ECOSIM_SOURCE_DIR
-    return normalizePath(std::string(ECOSIM_SOURCE_DIR) + "/" + relative);
-#else
-    return normalizePath(relative);
-#endif
+    auto root = locateRepoRoot();
+    return normalizePath((root / relative).string());
 }
 
 namespace {
