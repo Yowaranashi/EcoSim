@@ -38,7 +38,6 @@ int main() {
         }
         return ecosim_tests::finishTest(true, "scenario_results", "Scenario results matched expectations");
     } catch (const std::filesystem::filesystem_error &error) {
-        return ecosim_tests::finishTest(false, "scenario_results",
-                                        std::string("Filesystem error: ") + error.what());
+        return ecosim_tests::finishTest(false, "scenario_results", ecosim_tests::formatFilesystemError(error));
     }
 }

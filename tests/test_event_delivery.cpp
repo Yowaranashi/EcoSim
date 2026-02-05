@@ -32,7 +32,6 @@ int main() {
         }
         return ecosim_tests::finishTest(true, "event_delivery", "Event delivery matched tick count");
     } catch (const std::filesystem::filesystem_error &error) {
-        return ecosim_tests::finishTest(false, "event_delivery",
-                                        std::string("Filesystem error: ") + error.what());
+        return ecosim_tests::finishTest(false, "event_delivery", ecosim_tests::formatFilesystemError(error));
     }
 }

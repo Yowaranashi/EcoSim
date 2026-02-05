@@ -24,7 +24,6 @@ int main() {
         }
         return ecosim_tests::finishTest(true, "start_order", "Start order validated");
     } catch (const std::filesystem::filesystem_error &error) {
-        return ecosim_tests::finishTest(false, "start_order",
-                                        std::string("Filesystem error: ") + error.what());
+        return ecosim_tests::finishTest(false, "start_order", ecosim_tests::formatFilesystemError(error));
     }
 }
