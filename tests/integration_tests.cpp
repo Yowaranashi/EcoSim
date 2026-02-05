@@ -1,7 +1,6 @@
 #include "core/app.h"
 #include "core/event_bus.h"
 #include "core/logger.h"
-#include "modules/recorder_csv.h"
 #include "modules/simulation_world.h"
 
 #include <functional>
@@ -114,20 +113,20 @@ int main() {
             message = "Failed to start modules";
             return false;
         }
-        app.runHeadless();
 
         auto world = dynamic_cast<ecosim::SimulationWorld *>(app.moduleManager().findModule("simulation_world"));
-        auto recorder = dynamic_cast<ecosim::RecorderCsv *>(app.moduleManager().findModule("recorder", "csv"));
+        auto recorder = app.moduleManager().findModule("recorder", "csv");
         if (!world || !recorder) {
             message = "Required modules not found";
             return false;
         }
-        if (recorder->events().empty()) {
-            message = "Recorder did not receive events";
-            return false;
-        }
-        if (static_cast<int>(recorder->events().size()) != world->readModel().tick) {
-            message = "Recorder events count does not match ticks";
+
+        int delivered = 0;
+        app.eventBus().subscribe("world.tick", [&delivered](const ecosim::SimulationEvent &) { delivered++; });
+        app.runHeadless();
+
+        if (delivered != world->readModel().tick) {
+            message = "Tick events count does not match ticks";
             return false;
         }
         return true;

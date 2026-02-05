@@ -2,3 +2,4 @@ id = "recorder"
 version = "0.1.0"
 dependencies = ["simulation_world"]
 criticality = "Important"
+library = "recorder_csv"

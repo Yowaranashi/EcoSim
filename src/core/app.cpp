@@ -1,8 +1,8 @@
 #include "core/app.h"
 
-#include "modules/recorder_csv.h"
 #include "modules/scenario_runner.h"
 #include "modules/simulation_world.h"
+#include "modules/world_port.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -40,15 +40,11 @@ bool Application::initialize(const std::string &config_path) {
     registry_.registerFactory("scenario", [](const ModuleInstanceConfig &instance, ModuleContext &context) {
         return std::make_unique<ScenarioRunner>(instance, context);
     });
-    registry_.registerFactory("recorder", [](const ModuleInstanceConfig &instance, ModuleContext &context) {
-        return std::make_unique<RecorderCsv>(instance, context);
-    });
-
     if (!module_manager_.buildModules(app_config_.instances, app_config_.error_policy, logger_)) {
         return false;
     }
 
-    auto world = dynamic_cast<SimulationWorld *>(module_manager_.findModule("simulation_world"));
+    auto world = dynamic_cast<IWorldPort *>(module_manager_.findModule("simulation_world"));
     auto scenario = dynamic_cast<ScenarioRunner *>(module_manager_.findModule("scenario"));
     if (scenario) {
         std::vector<std::string> types;
@@ -74,7 +70,7 @@ bool Application::startModules() {
 void Application::runHeadless() {
     running_ = true;
 
-    auto world = dynamic_cast<SimulationWorld *>(module_manager_.findModule("simulation_world"));
+    auto world = dynamic_cast<IWorldPort *>(module_manager_.findModule("simulation_world"));
     if (!world) {
         logger_.log(LogChannel::System, "simulation_world module is required for headless run");
         return;
