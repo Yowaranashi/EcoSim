@@ -1,5 +1,6 @@
 #include "modules/recorder_csv.h"
-#include "core/logger.h"
+
+#include "core/module_registry.h"
 #include <filesystem>
 
 namespace ecosim {
@@ -45,3 +46,18 @@ void RecorderCsv::handleEvent(const SimulationEvent &event) {
 }
 
 } // namespace ecosim
+
+#if defined(_WIN32)
+#define ECOSIM_MODULE_EXPORT __declspec(dllexport)
+#else
+#define ECOSIM_MODULE_EXPORT
+#endif
+
+extern "C" ECOSIM_MODULE_EXPORT void ecosimRegisterModule(ecosim::ModuleRegistry &registry) {
+    registry.registerFactory("recorder",
+                             [](const ecosim::ModuleInstanceConfig &instance, ecosim::ModuleContext &context) {
+                                 return std::make_unique<ecosim::RecorderCsv>(instance, context);
+                             });
+}
+
+#undef ECOSIM_MODULE_EXPORT

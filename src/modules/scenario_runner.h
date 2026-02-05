@@ -2,7 +2,7 @@
 
 #include "core/module.h"
 #include "core/scenario.h"
-#include "modules/simulation_world.h"
+#include "modules/world_port.h"
 
 #include <set>
 
@@ -18,7 +18,7 @@ public:
     void onStart() override;
     void onPreTick() override;
 
-    void setWorld(SimulationWorld *world) { world_ = world; }
+    void setWorld(IWorldPort *world) { world_ = world; }
     void setAvailableModules(const std::vector<std::string> &modules);
 
 private:
@@ -29,7 +29,7 @@ private:
     ModuleContext &context_;
     ScenarioTimeline timeline_;
     std::set<std::string> available_modules_;
-    SimulationWorld *world_ = nullptr;
+    IWorldPort *world_ = nullptr;
     bool initialized_ = false;
 };
 
