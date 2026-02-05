@@ -29,11 +29,15 @@ TestResult runTest(const std::string &name, const std::function<bool(std::string
 }
 } // namespace
 
+std::string normalizePath(const std::string &path) {
+    return std::filesystem::path(path).generic_string();
+}
+
 std::string sourcePath(const std::string &relative) {
 #ifdef ECOSIM_SOURCE_DIR
-    return std::string(ECOSIM_SOURCE_DIR) + "/" + relative;
+    return normalizePath(std::string(ECOSIM_SOURCE_DIR) + "/" + relative);
 #else
-    return relative;
+    return normalizePath(relative);
 #endif
 }
 
@@ -43,7 +47,7 @@ std::string writeTestConfig() {
     std::ofstream config_file(config_path);
     auto modules_dir = sourcePath("modules");
     auto scenario_path = sourcePath("tests/data/scenario.toml");
-    auto output_dir = (std::filesystem::current_path() / "test_output").string();
+    auto output_dir = normalizePath((std::filesystem::current_path() / "test_output").string());
     config_file << "mode = \"headless\"\n";
     config_file << "error_policy = \"fail-fast\"\n";
     config_file << "modules_dir = \"" << modules_dir << "\"\n";
