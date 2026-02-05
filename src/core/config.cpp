@@ -267,6 +267,9 @@ ModuleManifest ConfigLoader::loadManifest(const std::string &path) {
     if (auto value = findRawValue(content, "criticality")) {
         manifest.criticality = parseCriticality(stripQuotes(*value));
     }
+    if (auto value = findRawValue(content, "library")) {
+        manifest.library_path = stripQuotes(*value);
+    }
     return manifest;
 }
 

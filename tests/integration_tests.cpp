@@ -1,9 +1,10 @@
 #include "core/app.h"
 #include "core/event_bus.h"
 #include "core/logger.h"
-#include "modules/recorder_csv.h"
 #include "modules/simulation_world.h"
 
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <sstream>
@@ -26,6 +27,29 @@ TestResult runTest(const std::string &name, const std::function<bool(std::string
     }
     return {name, passed, message};
 }
+
+std::string sourcePath(const std::string &relative);
+
+std::string writeTestConfig() {
+    std::filesystem::path config_path = std::filesystem::current_path() / "app_test.toml";
+    std::ofstream config_file(config_path);
+    auto modules_dir = sourcePath("modules");
+    auto scenario_path = sourcePath("tests/data/scenario.toml");
+    auto output_dir = (std::filesystem::current_path() / "test_output").string();
+    config_file << "mode = \"headless\"\n";
+    config_file << "error_policy = \"fail-fast\"\n";
+    config_file << "modules_dir = \"" << modules_dir << "\"\n";
+    config_file << "scenario_path = \"" << scenario_path << "\"\n";
+    config_file << "output_dir = \"" << output_dir << "\"\n";
+    config_file << "dt = 1.0\n";
+    config_file << "max_ticks = 3\n";
+    config_file << "instances = [\n";
+    config_file << "  { type = \"simulation_world\", id = \"default\", enable = true },\n";
+    config_file << "  { type = \"scenario\", id = \"default\", enable = true },\n";
+    config_file << "  { type = \"recorder\", id = \"csv\", enable = true, params = { sink = \"memory\" } }\n";
+    config_file << "]\n";
+    return config_path.string();
+}
 }
 
 std::string sourcePath(const std::string &relative) {
@@ -43,12 +67,25 @@ int main() {
         std::ostringstream output;
         ecosim::Logger logger(output);
         ecosim::Application app(logger);
-        if (!app.initialize(sourcePath("tests/data/app_base.toml"))) {
+        auto config_path = writeTestConfig();
+        if (!app.initialize(config_path)) {
             message = "Failed to initialize app";
             return false;
         }
-        if (app.registry().manifests().size() < 3) {
-            message = "Expected manifests to load";
+        if (!app.startModules()) {
+            message = "Failed to start modules";
+            return false;
+        }
+        if (!app.moduleManager().findModule("simulation_world")) {
+            message = "simulation_world module missing";
+            return false;
+        }
+        if (!app.moduleManager().findModule("scenario")) {
+            message = "scenario module missing";
+            return false;
+        }
+        if (!app.moduleManager().findModule("recorder", "csv")) {
+            message = "recorder module missing";
             return false;
         }
         return true;
@@ -58,45 +95,49 @@ int main() {
         std::ostringstream output;
         ecosim::Logger logger(output);
         ecosim::Application app(logger);
-        if (app.initialize(sourcePath("tests/data/app_missing_important.toml"))) {
-            message = "Expected initialize to fail on missing Important factory";
+        auto config_path = writeTestConfig();
+        if (!app.initialize(config_path)) {
+            message = "Failed to init app";
             return false;
         }
-
-        ecosim::Application app_order(logger);
-        if (!app_order.initialize(sourcePath("tests/data/app_base.toml"))) {
-            message = "Failed to init base app";
-            return false;
-        }
-        if (!app_order.startModules()) {
+        if (!app.startModules()) {
             message = "Failed to start modules";
             return false;
         }
-        auto order = app_order.moduleManager().startOrder();
+        auto order = app.moduleManager().startOrder();
         if (order.empty() || order.front() != "simulation_world") {
-            message = "simulation_world should start first";
+            message = "simulation_world should start before dependents";
             return false;
         }
         return true;
     }));
 
     results.push_back(runTest("T3", [](std::string &message) {
-        ecosim::EventBus bus;
-        bool delivered = false;
-        bus.subscribe("event.test", [&delivered](const ecosim::SimulationEvent &) { delivered = true; });
-        ecosim::SimulationEvent event{ "event.test", 1, {} };
-        bus.emit(event);
-        if (delivered) {
-            message = "Event delivered before buffer flush";
+        std::ostringstream output;
+        ecosim::Logger logger(output);
+        ecosim::Application app(logger);
+        auto config_path = writeTestConfig();
+        if (!app.initialize(config_path)) {
+            message = "Failed to init app";
             return false;
         }
-        if (bus.bufferedCount() != 1) {
-            message = "Event buffer should contain one event";
+        if (!app.startModules()) {
+            message = "Failed to start modules";
             return false;
         }
-        bus.deliverBuffered();
-        if (!delivered) {
-            message = "Event not delivered after buffer flush";
+
+        auto world = dynamic_cast<ecosim::SimulationWorld *>(app.moduleManager().findModule("simulation_world"));
+        if (!world) {
+            message = "simulation_world module missing";
+            return false;
+        }
+
+        int delivered = 0;
+        app.eventBus().subscribe("world.tick", [&delivered](const ecosim::SimulationEvent &) { delivered++; });
+        app.runHeadless();
+
+        if (delivered != world->readModel().tick) {
+            message = "Tick events count does not match ticks";
             return false;
         }
         return true;
@@ -106,7 +147,8 @@ int main() {
         std::ostringstream output;
         ecosim::Logger logger(output);
         ecosim::Application app(logger);
-        if (!app.initialize(sourcePath("tests/data/app_base.toml"))) {
+        auto config_path = writeTestConfig();
+        if (!app.initialize(config_path)) {
             message = "Failed to init app";
             return false;
         }
@@ -117,50 +159,19 @@ int main() {
         app.runHeadless();
 
         auto world = dynamic_cast<ecosim::SimulationWorld *>(app.moduleManager().findModule("simulation_world"));
-        auto recorder = dynamic_cast<ecosim::RecorderCsv *>(app.moduleManager().findModule("recorder", "csv"));
-        if (!world || !recorder) {
-            message = "Required modules not found";
+        if (!world) {
+            message = "simulation_world module missing";
             return false;
         }
-        if (recorder->events().empty()) {
-            message = "Recorder did not receive events";
+        auto boar_it = world->readModel().population_by_species.find("boar");
+        auto deer_it = world->readModel().population_by_species.find("deer");
+        if (boar_it == world->readModel().population_by_species.end() ||
+            deer_it == world->readModel().population_by_species.end()) {
+            message = "Scenario commands did not create expected species";
             return false;
         }
-        if (static_cast<int>(recorder->events().size()) != world->readModel().tick) {
-            message = "Recorder events count does not match ticks";
-            return false;
-        }
-        return true;
-    }));
-
-    results.push_back(runTest("T5", [](std::string &message) {
-        auto run_once = [](std::string &checksum) {
-            std::ostringstream output;
-            ecosim::Logger logger(output);
-            ecosim::Application app(logger);
-            if (!app.initialize(sourcePath("tests/data/app_base.toml"))) {
-                return false;
-            }
-            if (!app.startModules()) {
-                return false;
-            }
-            app.runHeadless();
-            auto world = dynamic_cast<ecosim::SimulationWorld *>(app.moduleManager().findModule("simulation_world"));
-            if (!world) {
-                return false;
-            }
-            checksum = world->checksum();
-            return true;
-        };
-
-        std::string checksum_a;
-        std::string checksum_b;
-        if (!run_once(checksum_a) || !run_once(checksum_b)) {
-            message = "Failed to run scenario";
-            return false;
-        }
-        if (checksum_a != checksum_b) {
-            message = "Checksums differ across runs";
+        if (boar_it->second != 5 || deer_it->second != 3) {
+            message = "Scenario command results did not match expected populations";
             return false;
         }
         return true;

@@ -16,12 +16,19 @@ add_library(ecosim_core
     src/core/module_registry.cpp
     src/core/config.cpp
     src/core/scenario.cpp
-    src/modules/recorder_csv.cpp
     src/modules/scenario_runner.cpp
     src/modules/simulation_world.cpp
 )
 
 target_include_directories(ecosim_core PUBLIC src)
+
+add_library(recorder_csv SHARED src/modules/recorder_csv.cpp)
+target_include_directories(recorder_csv PUBLIC src)
+target_link_libraries(recorder_csv PRIVATE ecosim_core)
+set_target_properties(recorder_csv PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/modules/recorder
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/modules/recorder
+)
 
 add_executable(ecosim src/main.cpp)
 target_link_libraries(ecosim PRIVATE ecosim_core)
