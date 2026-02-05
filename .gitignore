@@ -41,6 +41,7 @@
 /build/
 /output/
 build/
+/install/
 
 # debug information files
 *.dwo

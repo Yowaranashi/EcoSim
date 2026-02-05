@@ -1,5 +1,4 @@
 #include "core/scenario.h"
-
 #include <algorithm>
 
 namespace ecosim {

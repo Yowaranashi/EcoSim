@@ -1,5 +1,4 @@
 #include "modules/scenario_runner.h"
-
 #include "core/config.h"
 #include "core/logger.h"
 
@@ -31,10 +30,9 @@ void ScenarioRunner::onStart() {
             return;
         }
     }
-
+    
     timeline_ = ScenarioTimeline(config);
     initialized_ = true;
-
     if (world_) {
         world_->enqueueCommand("world.reset", {{"seed", std::to_string(config.seed)}});
         world_->enqueueCommand("stop.at_tick", {{"value", std::to_string(config.stop_at_tick)}});
@@ -55,9 +53,11 @@ void ScenarioRunner::onPreTick() {
 void ScenarioRunner::dispatchAction(const ScenarioConfig::ScheduledAction &action) {
     if (action.command == "spawn") {
         world_->enqueueCommand("spawn", action.params);
-    } else if (action.command == "set_param") {
+    }
+    else if (action.command == "set_param") {
         world_->enqueueCommand("set_param", action.params);
-    } else if (action.command == "apply_shock") {
+    }
+    else if (action.command == "apply_shock") {
         world_->enqueueCommand("apply_shock", action.params);
     }
 }

@@ -1,5 +1,4 @@
 #include "modules/simulation_world.h"
-
 #include "core/logger.h"
 
 namespace ecosim {

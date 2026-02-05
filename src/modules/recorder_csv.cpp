@@ -1,7 +1,5 @@
 #include "modules/recorder_csv.h"
-
 #include "core/logger.h"
-
 #include <filesystem>
 
 namespace ecosim {
@@ -27,7 +25,6 @@ void RecorderCsv::onStart() {
         file_.open(output_path_, std::ios::out | std::ios::trunc);
         file_ << "tick,seed,energy_total\n";
     }
-
     context_.eventBus().subscribe("world.tick", [this](const SimulationEvent &event) { handleEvent(event); });
 }
 
