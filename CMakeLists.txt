@@ -44,18 +44,22 @@ target_link_libraries(ecosim PRIVATE ecosim_core)
 
 add_executable(ecosim_test_modules_start tests/test_modules_start.cpp)
 target_link_libraries(ecosim_test_modules_start PRIVATE ecosim_core)
+target_include_directories(ecosim_test_modules_start PRIVATE ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME ecosim_test_modules_start COMMAND ecosim_test_modules_start)
 
 add_executable(ecosim_test_start_order tests/test_start_order.cpp)
 target_link_libraries(ecosim_test_start_order PRIVATE ecosim_core)
+target_include_directories(ecosim_test_start_order PRIVATE ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME ecosim_test_start_order COMMAND ecosim_test_start_order)
 
 add_executable(ecosim_test_event_delivery tests/test_event_delivery.cpp)
 target_link_libraries(ecosim_test_event_delivery PRIVATE ecosim_core)
+target_include_directories(ecosim_test_event_delivery PRIVATE ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME ecosim_test_event_delivery COMMAND ecosim_test_event_delivery)
 
 add_executable(ecosim_test_scenario_results tests/test_scenario_results.cpp)
 target_link_libraries(ecosim_test_scenario_results PRIVATE ecosim_core)
+target_include_directories(ecosim_test_scenario_results PRIVATE ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME ecosim_test_scenario_results COMMAND ecosim_test_scenario_results)
 
 include(GNUInstallDirs)
