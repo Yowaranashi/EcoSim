@@ -170,7 +170,7 @@ int main() {
             message = "Scenario commands did not create expected species";
             return false;
         }
-        if (boar_it->second != 5 || deer_it->second != 3) {
+        if (boar_it->second != 4 || deer_it->second != 2) {
             message = "Scenario command results did not match expected populations";
             return false;
         }

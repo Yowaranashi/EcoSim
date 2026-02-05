@@ -29,6 +29,14 @@ target_link_libraries(recorder_csv PRIVATE ecosim_core)
 set_target_properties(recorder_csv PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/modules/recorder
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/modules/recorder
+    LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/modules/recorder
+    LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/modules/recorder
+    LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_SOURCE_DIR}/modules/recorder
+    LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_SOURCE_DIR}/modules/recorder
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/modules/recorder
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/modules/recorder
+    RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_SOURCE_DIR}/modules/recorder
+    RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_SOURCE_DIR}/modules/recorder
 )
 
 add_executable(ecosim src/main.cpp)
