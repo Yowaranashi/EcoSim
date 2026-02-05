@@ -1,6 +1,6 @@
 #include "core/app.h"
 #include "core/logger.h"
-#include "tests/test_support.h"
+#include "test_support.h"
 
 #include <iostream>
 #include <sstream>
