@@ -29,6 +29,7 @@ int main() {
         }
         return ecosim_tests::finishTest(true, "modules_start", "All modules loaded and started");
     } catch (const std::filesystem::filesystem_error &error) {
-        return ecosim_tests::finishTest(false, "modules_start", ecosim_tests::formatFilesystemError(error));
+        return ecosim_tests::finishTest(false, "modules_start",
+                                        std::string("Filesystem error: ") + error.what());
     }
 }

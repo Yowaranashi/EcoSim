@@ -101,24 +101,4 @@ inline int finishTest(bool passed, const std::string &name, const std::string &m
     return 1;
 }
 
-inline std::string formatFilesystemError(const std::filesystem::filesystem_error &error) {
-    std::ostringstream message;
-    message << "Filesystem error: " << error.what();
-    message << "\nWindows: Internal ctest changing into directory: D:/a/EcoSim/EcoSim/build";
-    message << "\nTest project D:/a/EcoSim/EcoSim/build";
-    message << "\n    Start 1: ecosim_test_modules_start";
-    message << "\n1/4 Test #1: ecosim_test_modules_start ........***Exception: SegFault  0.05 sec";
-    message << "\n";
-    message << "\n    Start 2: ecosim_test_start_order";
-    message << "\n2/4 Test #2: ecosim_test_start_order ..........***Exception: SegFault  0.01 sec";
-    message << "\n";
-    message << "\n    Start 3: ecosim_test_event_delivery";
-    message << "\n3/4 Test #3: ecosim_test_event_delivery .......***Exception: SegFault  0.01 sec";
-    message << "\n";
-    message << "\n    Start 4: ecosim_test_scenario_results";
-    message << "\n4/4 Test #4: ecosim_test_scenario_results .....***Exception: SegFault  0.01 sec";
-    message << "\n";
-    return message.str();
-}
-
 } // namespace ecosim_tests
