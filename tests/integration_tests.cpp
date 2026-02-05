@@ -27,9 +27,17 @@ TestResult runTest(const std::string &name, const std::function<bool(std::string
     }
     return {name, passed, message};
 }
+} // namespace
 
-std::string sourcePath(const std::string &relative);
+std::string sourcePath(const std::string &relative) {
+#ifdef ECOSIM_SOURCE_DIR
+    return std::string(ECOSIM_SOURCE_DIR) + "/" + relative;
+#else
+    return relative;
+#endif
+}
 
+namespace {
 std::string writeTestConfig() {
     std::filesystem::path config_path = std::filesystem::current_path() / "app_test.toml";
     std::ofstream config_file(config_path);
@@ -50,15 +58,7 @@ std::string writeTestConfig() {
     config_file << "]\n";
     return config_path.string();
 }
-}
-
-std::string sourcePath(const std::string &relative) {
-#ifdef ECOSIM_SOURCE_DIR
-    return std::string(ECOSIM_SOURCE_DIR) + "/" + relative;
-#else
-    return relative;
-#endif
-}
+} // namespace
 
 int main() {
     std::vector<TestResult> results;

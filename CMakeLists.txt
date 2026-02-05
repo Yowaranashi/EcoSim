@@ -21,6 +21,7 @@ add_library(ecosim_core
 )
 
 target_include_directories(ecosim_core PUBLIC src)
+set_target_properties(ecosim_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_library(recorder_csv SHARED src/modules/recorder_csv.cpp)
 target_include_directories(recorder_csv PUBLIC src)
