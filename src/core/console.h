@@ -13,6 +13,7 @@ public:
 
     void registerCommand(const std::string &name, CommandHandler handler);
     bool execute(const std::string &line);
+    std::vector<std::string> commandNames() const;
 
 private:
     std::map<std::string, CommandHandler> handlers_;
