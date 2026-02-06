@@ -1,5 +1,6 @@
 #include "core/app.h"
 
+#include "modules/agent_behavoir.h"
 #include "modules/scenario_runner.h"
 #include "modules/simulation_world.h"
 #include "modules/world_port.h"
@@ -39,6 +40,9 @@ bool Application::initialize(const std::string &config_path) {
     });
     registry_.registerFactory("scenario", [](const ModuleInstanceConfig &instance, ModuleContext &context) {
         return std::make_unique<ScenarioRunner>(instance, context);
+    });
+    registry_.registerFactory("agent_behavoir", [](const ModuleInstanceConfig &instance, ModuleContext &context) {
+        return std::make_unique<AgentBehavoir>(instance, context);
     });
     if (!module_manager_.buildModules(app_config_.instances, app_config_.error_policy, logger_)) {
         return false;
@@ -132,6 +136,13 @@ void Application::registerCoreCommands() {
     });
     console_.registerCommand("module.stop", [this](const std::vector<std::string> &) {
         logger_.log(LogChannel::System, "module.stop is not supported in MVP (static modules)");
+    });
+    console_.registerCommand("help", [this](const std::vector<std::string> &) {
+        auto names = console_.commandNames();
+        logger_.log(LogChannel::System, "Available commands:");
+        for (const auto &name : names) {
+            logger_.log(LogChannel::System, " - " + name);
+        }
     });
     console_.registerCommand("sim.run", [this](const std::vector<std::string> &) {
         runHeadless();

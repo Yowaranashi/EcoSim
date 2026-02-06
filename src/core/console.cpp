@@ -1,5 +1,6 @@
 #include "core/console.h"
 
+#include <algorithm>
 #include <sstream>
 
 namespace ecosim {
@@ -26,6 +27,16 @@ bool Console::execute(const std::string &line) {
     }
     it->second(args);
     return true;
+}
+
+std::vector<std::string> Console::commandNames() const {
+    std::vector<std::string> names;
+    names.reserve(handlers_.size());
+    for (const auto &entry : handlers_) {
+        names.push_back(entry.first);
+    }
+    std::sort(names.begin(), names.end());
+    return names;
 }
 
 } // namespace ecosim

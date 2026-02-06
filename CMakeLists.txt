@@ -16,6 +16,7 @@ add_library(ecosim_core
     src/core/module_registry.cpp
     src/core/config.cpp
     src/core/scenario.cpp
+    src/modules/agent_behavoir.cpp
     src/modules/scenario_runner.cpp
     src/modules/simulation_world.cpp
 )
