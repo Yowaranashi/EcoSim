@@ -1,18 +1,5 @@
 # Описание модулей и функций EcoSim
 
-Документ описывает все модули из `src/modules/` и перечисляет файлы в `src/core`, которые с ними взаимодействуют. Также включены сведения о tick-системе и назначении `src/core/scenario.cpp`.
-
-## Модули в `src/modules/`
-
-### `src/modules/agent_behavoir.h` / `src/modules/agent_behavoir.cpp`
-**Модуль:** `AgentBehavoir` (заглушка поведения агента).
-- **Назначение:** демонстрационный модуль, который пишет в лог при инициализации и на каждом тике.
-- **Ключевые функции:**
-  - `AgentBehavoir::AgentBehavoir(...)` — сохраняет тип/инстанс и контекст модуля.
-  - `onInit()` — пишет системный лог, что модуль инициализирован.
-  - `onTick()` — пишет системный лог на каждом тике.
-- **Взаимодействия:** использует `ModuleContext::logger()` для логирования.
-
 ### `src/modules/recorder_csv.h` / `src/modules/recorder_csv.cpp`
 **Модуль:** `RecorderCsv` (запись событий в CSV и/или память).
 - **Назначение:** подписывается на события `world.tick` и сохраняет их в памяти или CSV-файл.
@@ -97,11 +84,6 @@
   - читает `manifest.toml` каждого модуля;
   - вызывает экспорт `ecosimRegisterModule` из динамической библиотеки (например, `recorder_csv`) для регистрации фабрики.
 
-### `src/core/config.h` / `src/core/config.cpp`
-- **Что делает:** описывает конфигурации (`AppConfig`, `ModuleManifest`, `ModuleInstanceConfig`, `ScenarioConfig`) и читает TOML-файлы.
-- **Взаимодействия с модулями:**
-  - задает список инстансов модулей, пути и параметры;
-  - `ScenarioRunner` получает сценарий через `ConfigLoader::loadScenario(...)`.
 
 ### `src/core/event_bus.h` / `src/core/event_bus.cpp`
 - **Что делает:** шина событий для симуляции.
@@ -110,36 +92,3 @@
   - `RecorderCsv` подписывается на события через `subscribe()`;
   - доставка буфера (`deliverBuffered()`) синхронизирована с tick-циклом в `Application`.
 
-### `src/core/logger.h` / `src/core/logger.cpp`
-- **Что делает:** логирует сообщения с меткой времени и каналом.
-- **Взаимодействия с модулями:**
-  - все модули используют `ModuleContext::logger()` для системных и симуляционных логов.
-
-### `src/core/scenario.h` / `src/core/scenario.cpp`
-- **Что делает:** хранит и предоставляет расписание сценария.
-- **Взаимодействия с модулями:**
-  - `ScenarioRunner` строит `ScenarioTimeline` и запрашивает действия через `actionsForTick()`.
-
-### `src/core/console.h` / `src/core/console.cpp`
-- **Что делает:** регистрирует и исполняет команды.
-- **Взаимодействия с модулями:**
-  - `Application` регистрирует команды, которые оперируют модулями (`module.list`, `sim.run`, `sys.quit`).
-
-## Как реализована tick-система
-
-Tick-цикл реализован в `Application::runHeadless()` и использует единый порядок вызовов для всех модулей:
-1. `onPreTick()` — подготовка к тику (например, `SimulationWorld` применяет накопленные команды, `ScenarioRunner` планирует команды на следующий тик).
-2. `onTick()` — основная работа тика (в `SimulationWorld` инкрементируется `ReadModel::tick`, обновляются популяции, публикуется событие `world.tick`).
-3. `onPostTick()` — постобработка (при необходимости в будущих модулях).
-4. `EventBus::deliverBuffered()` — доставка всех буферизованных событий.
-5. `onDeliverBufferedEvents()` — хук на модулях для реакции после доставки.
-
-Завершение цикла происходит, когда `SimulationWorld::shouldStop()` возвращает `true` (например, после команды `stop.at_tick`) или когда достигнут `AppConfig::max_ticks`.
-
-## Для чего нужен `src/core/scenario.cpp`
-`src/core/scenario.cpp` реализует класс `ScenarioTimeline`, который:
-- принимает `ScenarioConfig`;
-- сортирует расписание действий (`schedule`) по номеру тика;
-- возвращает действия для конкретного тика через `actionsForTick()`.
-
-Именно этот класс используется `ScenarioRunner` для быстрого получения списка команд, которые нужно применить в конкретный тик.
