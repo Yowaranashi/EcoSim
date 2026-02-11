@@ -65,6 +65,7 @@ cmake -S . -B build
 cmake --build build
 cmake --build build --target package
 ```
+'console' - чтобы запустить в виде консоли в config
 
 ## Команды консоли
 
