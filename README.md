@@ -29,16 +29,31 @@ cmake --build build
 
 ## Запуск тестов
 
+Интеграционные тесты собраны в один раннер: `ecosim_integration_tests` (6 сценариев 5.4.1–5.4.6).
+
 ```bash
+cmake -S . -B build
 cmake --build build
-ctest --test-dir build
+ctest --test-dir build --output-on-failure
 ```
+
+При необходимости можно запустить раннер напрямую:
+
+```bash
+./build/ecosim_integration_tests
+```
+
+### Где лежат тестовые данные
+
+- Раннер ищет рабочую папку данных в таком порядке: `data/` рядом с бинарником (или выше по дереву), затем `tests/data/`.
+- Если `data/` существует (как в вашем запуске из `build/Debug`), временные `app_*.toml` и `scenario_*.toml` будут созданы именно там.
+- Модули берутся из `modules/` рядом с найденной рабочей директорией, поэтому ручное копирование `tests/data` в `build` не требуется.
 
 Для генераторов с несколькими конфигурациями (Visual Studio/MSBuild):
 
 ```bash
 cmake --build build --config Debug
-ctest --test-dir build -C Debug
+ctest --test-dir build -C Debug --output-on-failure
 ```
 
 ## Установка и упаковка
