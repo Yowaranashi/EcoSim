@@ -16,5 +16,11 @@ jobs:
         run: cmake -S . -B build
       - name: Build
         run: cmake --build build --config Release
-      - name: Test
-        run: ctest --test-dir build --output-on-failure -C Release
+      - name: Run integration tests
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ./build/Release/ecosim_integration_tests.exe
+          else
+            ./build/ecosim_integration_tests
+          fi
