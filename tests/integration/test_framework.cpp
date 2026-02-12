@@ -8,13 +8,11 @@ namespace {
 std::string boolLiteral(const std::string &value) {
     return value == "true" ? "true" : "false";
 }
-} // namespace
 
-std::filesystem::path repoRoot() {
+std::filesystem::path findRuntimeBase() {
     auto current = std::filesystem::current_path();
-    for (int i = 0; i < 6; ++i) {
-        if (std::filesystem::exists(current / "modules" / "simulation_world" / "manifest.toml") &&
-            std::filesystem::exists(current / "src" / "core" / "app.cpp")) {
+    for (int i = 0; i < 10; ++i) {
+        if (std::filesystem::exists(current / "modules" / "simulation_world" / "manifest.toml")) {
             return current;
         }
         if (!current.has_parent_path()) {
@@ -25,15 +23,45 @@ std::filesystem::path repoRoot() {
     return std::filesystem::current_path();
 }
 
+std::filesystem::path findDataDir() {
+    auto base = findRuntimeBase();
+    if (std::filesystem::exists(base / "data")) {
+        return base / "data";
+    }
+    if (std::filesystem::exists(base / "tests" / "data")) {
+        return base / "tests" / "data";
+    }
+
+    auto current = std::filesystem::current_path();
+    for (int i = 0; i < 10; ++i) {
+        if (std::filesystem::exists(current / "data")) {
+            return current / "data";
+        }
+        if (std::filesystem::exists(current / "tests" / "data")) {
+            return current / "tests" / "data";
+        }
+        if (!current.has_parent_path()) {
+            break;
+        }
+        current = current.parent_path();
+    }
+
+    return base / "data";
+}
+} // namespace
+
+std::filesystem::path repoRoot() {
+    return findRuntimeBase();
+}
+
 std::filesystem::path writeScenarioFile(const std::string &file_name,
                                         int seed,
                                         int stop_at_tick,
                                         const std::vector<std::string> &requires,
                                         const std::vector<std::map<std::string, std::string>> &schedule) {
-    auto root = repoRoot();
-    auto runtime_data_dir = root / "build" / "test_runtime_data";
-    std::filesystem::create_directories(runtime_data_dir);
-    auto path = runtime_data_dir / file_name;
+    auto data_dir = findDataDir();
+    std::filesystem::create_directories(data_dir);
+    auto path = data_dir / file_name;
     std::ofstream file(path, std::ios::out | std::ios::trunc);
     file << "seed = " << seed << '\n';
     file << "stop_at_tick = " << stop_at_tick << '\n';
@@ -72,17 +100,17 @@ std::filesystem::path writeAppConfigFile(const std::string &file_name,
                                          const std::filesystem::path &scenario_path,
                                          int max_ticks,
                                          const std::vector<std::map<std::string, std::string>> &instances) {
-    auto root = repoRoot();
-    auto runtime_data_dir = root / "build" / "test_runtime_data";
-    std::filesystem::create_directories(runtime_data_dir);
-    auto path = runtime_data_dir / file_name;
+    auto base = findRuntimeBase();
+    auto data_dir = findDataDir();
+    std::filesystem::create_directories(data_dir);
+    auto path = data_dir / file_name;
     std::ofstream file(path, std::ios::out | std::ios::trunc);
 
     file << "mode = \"headless\"\n";
     file << "error_policy = \"fail-fast\"\n";
-    file << "modules_dir = \"" << (root / "modules").generic_string() << "\"\n";
+    file << "modules_dir = \"" << (base / "modules").generic_string() << "\"\n";
     file << "scenario_path = \"" << scenario_path.generic_string() << "\"\n";
-    file << "output_dir = \"" << (runtime_data_dir / "output").generic_string() << "\"\n";
+    file << "output_dir = \"" << (base / "output").generic_string() << "\"\n";
     file << "dt = 1.0\n";
     file << "max_ticks = " << max_ticks << "\n";
 
