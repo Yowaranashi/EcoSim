@@ -2,23 +2,67 @@
 
 #include <fstream>
 
+#if defined(_WIN32)
+#include <windows.h>
+#elif defined(__linux__)
+#include <unistd.h>
+#endif
+
 namespace ecosim_integration {
 
 namespace {
-std::string boolLiteral(const std::string &value) {
-    return value == "true" ? "true" : "false";
+std::filesystem::path executableDir() {
+#if defined(_WIN32)
+    std::wstring buffer(32768, L'\0');
+    auto size = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+    if (size == 0 || size == buffer.size()) {
+        return {};
+    }
+    buffer.resize(size);
+    return std::filesystem::path(buffer).parent_path();
+#elif defined(__linux__)
+    std::vector<char> buffer(4096, '\0');
+    auto size = readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
+    if (size <= 0) {
+        return {};
+    }
+    buffer[static_cast<std::size_t>(size)] = '\0';
+    return std::filesystem::path(buffer.data()).parent_path();
+#else
+    return {};
+#endif
 }
 
-std::filesystem::path findRuntimeBase() {
-    auto current = std::filesystem::current_path();
-    for (int i = 0; i < 10; ++i) {
+std::filesystem::path findRuntimeBaseFrom(std::filesystem::path current) {
+    if (current.empty()) {
+        return {};
+    }
+    for (int i = 0; i < 16; ++i) {
         if (std::filesystem::exists(current / "modules" / "simulation_world" / "manifest.toml")) {
             return current;
         }
         if (!current.has_parent_path()) {
             break;
         }
-        current = current.parent_path();
+        auto parent = current.parent_path();
+        if (parent == current) {
+            break;
+        }
+        current = parent;
+    }
+    return {};
+}
+
+std::string boolLiteral(const std::string &value) {
+    return value == "true" ? "true" : "false";
+}
+
+std::filesystem::path findRuntimeBase() {
+    if (auto from_exe = findRuntimeBaseFrom(executableDir()); !from_exe.empty()) {
+        return from_exe;
+    }
+    if (auto from_cwd = findRuntimeBaseFrom(std::filesystem::current_path()); !from_cwd.empty()) {
+        return from_cwd;
     }
     return std::filesystem::current_path();
 }
@@ -32,18 +76,27 @@ std::filesystem::path findDataDir() {
         return base / "tests" / "data";
     }
 
-    auto current = std::filesystem::current_path();
-    for (int i = 0; i < 10; ++i) {
-        if (std::filesystem::exists(current / "data")) {
-            return current / "data";
+    for (auto start : {executableDir(), std::filesystem::current_path()}) {
+        auto current = start;
+        if (current.empty()) {
+            continue;
         }
-        if (std::filesystem::exists(current / "tests" / "data")) {
-            return current / "tests" / "data";
+        for (int i = 0; i < 16; ++i) {
+            if (std::filesystem::exists(current / "data")) {
+                return current / "data";
+            }
+            if (std::filesystem::exists(current / "tests" / "data")) {
+                return current / "tests" / "data";
+            }
+            if (!current.has_parent_path()) {
+                break;
+            }
+            auto parent = current.parent_path();
+            if (parent == current) {
+                break;
+            }
+            current = parent;
         }
-        if (!current.has_parent_path()) {
-            break;
-        }
-        current = current.parent_path();
     }
 
     return base / "data";
