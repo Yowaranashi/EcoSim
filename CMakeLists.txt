@@ -40,6 +40,10 @@ set_target_properties(recorder_csv PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_SOURCE_DIR}/modules/recorder
 )
 
+add_library(recorder_csv_static STATIC src/modules/recorder_csv.cpp)
+target_include_directories(recorder_csv_static PUBLIC src)
+target_link_libraries(recorder_csv_static PRIVATE ecosim_core)
+
 add_executable(ecosim src/main.cpp)
 target_link_libraries(ecosim PRIVATE ecosim_core)
 
@@ -54,7 +58,7 @@ add_executable(ecosim_integration_tests
     tests/integration/test_5_recorder_isolation.cpp
     tests/integration/test_6_reproducibility.cpp
 )
-target_link_libraries(ecosim_integration_tests PRIVATE ecosim_core recorder_csv)
+target_link_libraries(ecosim_integration_tests PRIVATE ecosim_core recorder_csv_static)
 target_include_directories(ecosim_integration_tests PRIVATE ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME ecosim_integration_tests COMMAND ecosim_integration_tests)
 
