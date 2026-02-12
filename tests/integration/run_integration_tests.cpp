@@ -1,7 +1,5 @@
 #include "integration/test_cases.h"
 
-#include <chrono>
-#include <iomanip>
 #include <iostream>
 
 int main() {
@@ -9,28 +7,17 @@ int main() {
 
     int passed = 0;
     int failed = 0;
-    for (std::size_t i = 0; i < tests.size(); ++i) {
-        auto &test = tests[i];
-        auto start = std::chrono::steady_clock::now();
+    for (auto &test : tests) {
         auto result = test->run();
-        auto finish = std::chrono::steady_clock::now();
-        std::chrono::duration<double> elapsed = finish - start;
-
-        const char *status = result.passed ? "success" : "error";
         if (result.passed) {
             ++passed;
+            std::cout << "[PASS] " << result.name << " :: " << result.details << '\n';
         } else {
             ++failed;
+            std::cout << "[FAIL] " << result.name << " :: " << result.details << '\n';
         }
-
-        std::cout << "№ " << (i + 1) << ' ' << result.name << " result: " << status << " time: "
-                  << std::fixed << std::setprecision(6) << elapsed.count() << " sec";
-        if (!result.details.empty()) {
-            std::cout << " details: " << result.details;
-        }
-        std::cout << '\n';
     }
 
-    std::cout << "\nИтоговый результат: " << passed << " success, " << failed << " error." << '\n';
+    std::cout << "\nИтоговый результат: " << passed << " passed, " << failed << " failed." << '\n';
     return failed == 0 ? 0 : 1;
 }
