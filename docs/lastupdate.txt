@@ -1,0 +1,1284 @@
+EcoSim: описание файлов проекта и функций
+=========================================
+
+Дата обновления: 2026-05-10
+Файл документации: docs/lastupdate.txt
+
+Примечание: в запросе было написано dock/lastupdate.txt. В проекте уже используется каталог docs/, поэтому файл создан как docs/lastupdate.txt.
+
+
+1. Верхний уровень проекта
+--------------------------
+
+Файл: CMakeLists.txt
+Назначение: описывает сборку проекта CMake.
+Что делает:
+  - задает C++17;
+  - включает тестирование;
+  - собирает библиотеку ecosim_models;
+  - собирает библиотеку ecosim_core;
+  - собирает recorder_csv как shared library и recorder_csv_static для тестов;
+  - собирает executable ecosim;
+  - собирает executable ecosim_integration_tests;
+  - регистрирует CTest-тест ecosim_integration_tests;
+  - описывает install и CPack package.
+Функций C++ нет.
+Входные данные: CMake cache/options, исходные файлы проекта.
+Выходные данные: build targets, install/package targets.
+
+Файл: README.md
+Назначение: пользовательская документация.
+Что делает:
+  - объясняет сборку;
+  - объясняет запуск;
+  - объясняет тесты;
+  - описывает консольные команды;
+  - описывает app.toml и scenario.toml;
+  - описывает schedule-команды и CSV.
+Функций C++ нет.
+Входные данные: текстовая документация.
+Выходные данные: справка для пользователя.
+
+Файл: LICENSE
+Назначение: лицензия проекта.
+Функций C++ нет.
+
+
+2. src/main.cpp
+---------------
+
+Назначение: точка входа приложения.
+
+Функции:
+  - int main(int argc, char** argv)
+    Вход:
+      - argc: количество аргументов командной строки;
+      - argv: массив аргументов. argv[1], если задан, используется как путь к app TOML.
+    Выход:
+      - 0 при успешном запуске и завершении;
+      - 1 при ошибке initialize/startModules.
+    Эффект:
+      - создает Logger;
+      - создает Application;
+      - вызывает initialize(config_path);
+      - вызывает startModules();
+      - запускает console или headless режим;
+      - вызывает shutdown().
+
+
+3. src/core/app.h и src/core/app.cpp
+------------------------------------
+
+Назначение: верхний объект приложения и владелец главных подсистем.
+
+Класс: ecosim::Application
+
+Функции:
+  - Application(Logger& logger)
+    Вход: logger.
+    Выход: объект Application.
+    Эффект: создает EventBus, AppConfig, ModuleRegistry, ModuleContext, ModuleManager, Console.
+
+  - ~Application()
+    Вход: нет.
+    Выход: нет.
+    Эффект: очищает EventBus, чтобы подписчики не переживали выгрузку модулей.
+
+  - bool initialize(const std::string& config_path)
+    Вход: путь к app TOML.
+    Выход: true/false.
+    Эффект: загружает AppConfig, загружает manifests, регистрирует core factories, строит модули, регистрирует консольные команды.
+
+  - bool startModules()
+    Вход: нет.
+    Выход: true/false.
+    Эффект: запускает модули через ModuleManager.
+
+  - void runHeadless()
+    Вход: нет.
+    Выход: нет.
+    Эффект: выполняет deterministic tick-loop:
+      1. onPreTick для всех модулей;
+      2. onTick для всех модулей;
+      3. onPostTick для всех модулей;
+      4. EventBus::deliverBuffered();
+      5. onDeliverBufferedEvents для всех модулей;
+      6. проверка shouldStop и max_ticks.
+
+  - void runConsoleLoop()
+    Вход: stdin.
+    Выход: нет.
+    Эффект: читает строки консоли и передает их в Console::execute().
+
+  - void shutdown()
+    Вход: нет.
+    Выход: нет.
+    Эффект: останавливает модули.
+
+  - ModuleManager& moduleManager()
+    Вход: нет.
+    Выход: ссылка на ModuleManager.
+
+  - ModuleRegistry& registry()
+    Вход: нет.
+    Выход: ссылка на ModuleRegistry.
+
+  - EventBus& eventBus()
+    Вход: нет.
+    Выход: ссылка на EventBus.
+
+  - const AppConfig& config() const
+    Вход: нет.
+    Выход: read-only AppConfig.
+
+  - Console& console()
+    Вход: нет.
+    Выход: ссылка на Console.
+
+  - void registerCoreCommands()
+    Вход: нет.
+    Выход: нет.
+    Эффект: регистрирует help, module.list, module.start, module.stop, sim.run, sim.start, sim.pause, sim.resume, sys.quit.
+
+
+4. src/core/config.h и src/core/config.cpp
+------------------------------------------
+
+Назначение: TOML-like загрузчик app-конфигов, manifests и сценариев.
+
+Структуры:
+  - ModuleManifest: type_id, version, dependencies, criticality, library_path.
+  - ModuleInstanceConfig: type_id, instance_id, enabled, params.
+  - AppConfig: mode, error_policy, instances, modules_dir, scenario_path, output_dir, dt, max_ticks.
+
+Функции публичного API:
+  - static AppConfig ConfigLoader::loadAppConfig(const std::string& path)
+    Вход: путь к app TOML.
+    Выход: AppConfig.
+    Эффект: читает mode, error_policy, modules_dir, scenario_path, output_dir, dt, max_ticks, instances.
+
+  - static ModuleManifest ConfigLoader::loadManifest(const std::string& path)
+    Вход: путь к manifest.toml.
+    Выход: ModuleManifest.
+    Эффект: читает type_id, version, dependencies, criticality, library_path.
+
+  - static ScenarioConfig ConfigLoader::loadScenario(const std::string& path)
+    Вход: путь к scenario TOML.
+    Выход: ScenarioConfig.
+    Эффект: читает legacy и новый формат сценария, проверяет model_id и integrator.
+
+  - Criticality parseCriticality(const std::string& value)
+    Вход: строка criticality.
+    Выход: Criticality.
+    Эффект: преобразует строку в enum.
+
+Основные внутренние функции config.cpp:
+  - readFile(path)
+    Вход: путь.
+    Выход: содержимое файла.
+
+  - trim(value)
+    Вход: строка.
+    Выход: строка без пробелов по краям.
+
+  - stripQuotes(value)
+    Вход: строка.
+    Выход: строка без внешних кавычек.
+
+  - findRawValue(content, key)
+    Вход: текст TOML, имя ключа.
+    Выход: optional raw value.
+
+  - parseArrayStrings(value)
+    Вход: TOML array строк.
+    Выход: vector<string>.
+
+  - parseArrayNumbers(value)
+    Вход: TOML array чисел.
+    Выход: vector<double>.
+
+  - parseNumberMap(value)
+    Вход: inline map string->number.
+    Выход: map<string,double>.
+
+  - parseMatrix(value)
+    Вход: TOML matrix.
+    Выход: vector<vector<double>>.
+
+  - parseArrayOfTables(value)
+    Вход: TOML array of inline tables.
+    Выход: vector<map<string,string>>.
+
+  - parseNumberTable(content, table_name)
+    Вход: TOML text, имя таблицы.
+    Выход: map<string,double>.
+
+  - mergeQualifiedNumberMap(target, prefix, values)
+    Вход: target map, prefix, map values.
+    Выход: нет.
+    Эффект: пишет prefix.name -> value.
+
+  - isSupportedIntegrator(integrator)
+    Вход: строка.
+    Выход: true для euler/rk4.
+
+
+5. src/core/console.h и src/core/console.cpp
+--------------------------------------------
+
+Назначение: простая консоль команд.
+
+Класс: ecosim::Console
+
+Функции:
+  - void registerCommand(const std::string& name, CommandHandler handler)
+    Вход: имя команды, callback vector<string>.
+    Выход: нет.
+    Эффект: сохраняет обработчик.
+
+  - bool execute(const std::string& line)
+    Вход: строка команды.
+    Выход: true, если команда найдена и выполнена; false, если команда неизвестна.
+    Эффект: разбивает строку на имя команды и аргументы, вызывает handler.
+
+  - std::vector<std::string> commandNames() const
+    Вход: нет.
+    Выход: список зарегистрированных команд.
+
+
+6. src/core/event_bus.h и src/core/event_bus.cpp
+------------------------------------------------
+
+Назначение: буферизованная доставка событий.
+
+Структура: SimulationEvent
+Поля:
+  - type: тип события;
+  - tick: номер tick;
+  - payload: string->string;
+  - numeric_payload: string->double;
+  - string_list_payload: string->vector<string>;
+  - numeric_vector_payload: string->vector<double>;
+  - metrics: string->double;
+  - flags: vector<string>.
+
+Класс: ecosim::EventBus
+
+Функции:
+  - void subscribe(const std::string& event_type, Handler handler)
+    Вход: тип события, callback.
+    Выход: нет.
+    Эффект: регистрирует подписчика.
+
+  - void emit(const SimulationEvent& event)
+    Вход: событие.
+    Выход: нет.
+    Эффект: кладет событие в buffer_, не доставляет сразу.
+
+  - void deliverBuffered()
+    Вход: нет.
+    Выход: нет.
+    Эффект: доставляет копию buffered events подписчикам и очищает buffer_.
+
+  - void clear()
+    Вход: нет.
+    Выход: нет.
+    Эффект: очищает подписчиков и буфер.
+
+  - std::size_t bufferedCount() const
+    Вход: нет.
+    Выход: число событий в буфере.
+
+
+7. src/core/logger.h и src/core/logger.cpp
+------------------------------------------
+
+Назначение: логирование в поток вывода.
+
+Enum: LogChannel
+  - System;
+  - Simulation.
+
+Класс: ecosim::Logger
+
+Функции:
+  - explicit Logger(std::ostream& output)
+    Вход: output stream.
+    Выход: объект Logger.
+
+  - void log(LogChannel channel, const std::string& message)
+    Вход: канал, сообщение.
+    Выход: нет.
+    Эффект: пишет строку лога в output_.
+
+
+8. src/core/module.h и src/core/module.cpp
+------------------------------------------
+
+Назначение: базовые типы модульной системы.
+
+Класс: ModuleContext
+
+Функции:
+  - ModuleContext(Logger& logger, EventBus& event_bus, const AppConfig& config)
+    Вход: logger, event_bus, config.
+    Выход: объект контекста.
+
+  - Logger& logger()
+    Вход: нет.
+    Выход: Logger&.
+
+  - EventBus& eventBus()
+    Вход: нет.
+    Выход: EventBus&.
+
+  - const AppConfig& config() const
+    Вход: нет.
+    Выход: const AppConfig&.
+
+Класс: IModule
+
+Функции:
+  - virtual const std::string& typeId() const
+    Вход: нет.
+    Выход: type id.
+
+  - virtual const std::string& instanceId() const
+    Вход: нет.
+    Выход: instance id.
+
+  - virtual void onInit()
+    Вход/выход: нет.
+    Эффект: hook инициализации.
+
+  - virtual void onStart()
+    Вход/выход: нет.
+    Эффект: hook старта.
+
+  - virtual void onStop()
+    Вход/выход: нет.
+    Эффект: hook остановки.
+
+  - virtual void onPreTick()
+    Вход/выход: нет.
+    Эффект: hook перед tick.
+
+  - virtual void onTick()
+    Вход/выход: нет.
+    Эффект: hook основного tick.
+
+  - virtual void onPostTick()
+    Вход/выход: нет.
+    Эффект: hook после tick.
+
+  - virtual void onDeliverBufferedEvents()
+    Вход/выход: нет.
+    Эффект: hook после доставки EventBus.
+
+src/core/module.cpp:
+  - отдельных функций нет; файл оставлен для единицы трансляции модуля.
+
+
+9. src/core/module_registry.h и src/core/module_registry.cpp
+-----------------------------------------------------------
+
+Назначение: реестр manifests и фабрик модулей.
+
+Класс: ModuleRegistry
+
+Функции:
+  - ~ModuleRegistry()
+    Вход/выход: нет.
+    Эффект: очищает factories_ и выгружает динамические библиотеки.
+
+  - void loadManifests(const std::filesystem::path& modules_dir)
+    Вход: каталог modules.
+    Выход: нет.
+    Эффект: читает manifest.toml, загружает динамические библиотеки.
+
+  - void registerFactory(const std::string& type_id, Factory factory)
+    Вход: type_id, фабрика ModulePtr.
+    Выход: нет.
+    Эффект: регистрирует способ создания модуля.
+
+  - const std::map<std::string, ModuleManifest>& manifests() const
+    Вход: нет.
+    Выход: карта manifests.
+
+  - const ModuleManifest* findManifest(const std::string& type_id) const
+    Вход: type_id.
+    Выход: указатель на manifest или nullptr.
+
+  - ModulePtr create(const ModuleInstanceConfig& instance, ModuleContext& context) const
+    Вход: instance config, context.
+    Выход: unique_ptr<IModule>.
+
+  - void loadLibrary(const std::filesystem::path& path)
+    Вход: путь к shared library.
+    Выход: нет.
+    Эффект: загружает DLL/.so и вызывает ecosimRegisterModule.
+
+
+10. src/core/module_manager.h и src/core/module_manager.cpp
+-----------------------------------------------------------
+
+Назначение: создание, связывание и запуск модулей.
+
+Класс: ModuleManager
+
+Функции:
+  - ModuleManager(ModuleRegistry& registry, ModuleContext& context)
+    Вход: registry, context.
+    Выход: объект ModuleManager.
+
+  - bool buildModules(const std::vector<ModuleInstanceConfig>& instances, ErrorPolicy policy, Logger& logger)
+    Вход: список instances, policy, logger.
+    Выход: true/false.
+    Эффект: создает включенные модули, рассчитывает зависимости, связывает ScenarioRunner с SimulationWorld.
+
+  - bool startModules(ErrorPolicy policy, Logger& logger)
+    Вход: policy, logger.
+    Выход: true/false.
+    Эффект: вызывает onInit и onStart в порядке зависимостей.
+
+  - void stopModules()
+    Вход/выход: нет.
+    Эффект: вызывает onStop в обратном/текущем порядке модулей.
+
+  - std::vector<IModule*> modules() const
+    Вход: нет.
+    Выход: список указателей на модули.
+
+  - const std::vector<std::string>& startOrder() const
+    Вход: нет.
+    Выход: порядок запуска.
+
+  - IModule* findModule(const std::string& type_id, const std::string& instance_id = "default") const
+    Вход: type_id, instance_id.
+    Выход: указатель на модуль или nullptr.
+
+  - std::vector<std::string> dependencyOrder(const std::map<std::string, std::vector<std::string>>& deps) const
+    Вход: граф зависимостей.
+    Выход: порядок запуска.
+
+
+11. src/core/scenario.h и src/core/scenario.cpp
+-----------------------------------------------
+
+Назначение: структуры сценария и timeline.
+
+Структуры:
+  - IntegratorConfig: type, dt.
+  - SpeciesConfig: id, initial_state, parameters.
+  - ModelConfig: model_id, species, initial_state, parameters, interaction_matrix.
+  - ScheduledAction: tick, command, params.
+  - ScenarioDefinition: scenario_id, model, seed, stop_at_tick, integrator, requires, schedule.
+  - ScenarioConfig: совместимый alias-наследник ScenarioDefinition.
+
+Класс: ScenarioTimeline
+
+Функции:
+  - explicit ScenarioTimeline(ScenarioConfig config)
+    Вход: ScenarioConfig.
+    Выход: объект timeline.
+
+  - const ScenarioConfig& config() const
+    Вход: нет.
+    Выход: конфиг сценария.
+
+  - std::vector<ScenarioConfig::ScheduledAction> actionsForTick(int tick) const
+    Вход: номер tick.
+    Выход: список действий для этого tick.
+
+
+12. src/models/integration_method.h
+-----------------------------------
+
+Назначение: enum интеграторов.
+
+Enum: IntegrationMethod
+  - Euler;
+  - RK4.
+
+Функций нет.
+Входные данные: используется как параметр advanceStep.
+Выходные данные: выбранный алгоритм интегрирования.
+
+
+13. src/models/model_dynamics.h
+-------------------------------
+
+Назначение: чистый интерфейс математических моделей.
+
+Класс: IModelDynamics
+
+Функции:
+  - virtual std::string modelId() const
+    Вход: нет.
+    Выход: model id.
+
+  - virtual void configure(const ModelConfig& config)
+    Вход: ModelConfig.
+    Выход: нет.
+    Эффект: настраивает модель.
+
+  - virtual std::vector<double> computeDerivatives(const std::vector<double>& state, double time) const
+    Вход: state, time.
+    Выход: производные dstate/dt.
+
+  - virtual void advanceStep(double dt, IntegrationMethod method)
+    Вход: dt, method.
+    Выход: нет.
+    Эффект: обновляет внутреннее состояние.
+
+  - virtual void setParameter(const std::string& name, double value)
+    Вход: имя, значение.
+    Выход: нет.
+    Эффект: меняет параметр.
+
+  - virtual void applyShock(const std::string& target, double strength)
+    Вход: target, strength.
+    Выход: нет.
+    Эффект: меняет состояние.
+
+  - virtual const std::vector<double>& getStateVector() const
+    Вход: нет.
+    Выход: state vector.
+
+  - virtual std::vector<std::string> getSpeciesNames() const
+    Вход: нет.
+    Выход: имена видов.
+
+  - virtual std::map<std::string, double> getMetrics() const
+    Вход: нет.
+    Выход: метрики.
+
+  - virtual std::string checksum() const
+    Вход: нет.
+    Выход: deterministic checksum.
+
+
+14. src/models/model_dynamics_base.h и .cpp
+-------------------------------------------
+
+Назначение: общий базовый класс для моделей.
+
+Класс: ModelDynamicsBase
+
+Функции:
+  - std::string modelId() const
+    Вход: нет.
+    Выход: model_id_.
+
+  - void configure(const ModelConfig& config)
+    Вход: ModelConfig.
+    Выход: нет.
+    Эффект: заполняет model_id_, species_names_, state_, parameters_, time_.
+
+  - void advanceStep(double dt, IntegrationMethod method)
+    Вход: dt, Euler/RK4.
+    Выход: нет.
+    Эффект: считает следующий state через computeDerivatives и clamp.
+
+  - void setParameter(const std::string& name, double value)
+    Вход: name, value.
+    Выход: нет.
+    Эффект: пишет в parameters_.
+
+  - void applyShock(const std::string& target, double strength)
+    Вход: species target, strength.
+    Выход: нет.
+    Эффект: state[target] = max(0, state + strength).
+
+  - const std::vector<double>& getStateVector() const
+    Вход: нет.
+    Выход: state_.
+
+  - std::vector<std::string> getSpeciesNames() const
+    Вход: нет.
+    Выход: species_names_.
+
+  - std::map<std::string, double> getMetrics() const
+    Вход: нет.
+    Выход: species_count, total_population, min_population, max_population.
+
+  - std::string checksum() const
+    Вход: нет.
+    Выход: hash по model/species/state/parameters.
+
+  - static double clampPopulation(double value)
+    Вход: double.
+    Выход: 0 для отрицательных/NaN/inf/почти нулевых, иначе value.
+
+  - static std::vector<double> clampState(const std::vector<double>& state)
+    Вход: vector<double>.
+    Выход: clamped vector.
+
+Внутренние функции .cpp:
+  - ensureDerivativeSize(state, derivatives)
+    Вход: state, derivatives.
+    Выход: нет.
+    Эффект: бросает исключение при несовпадении размеров.
+
+  - addScaled(state, derivatives, scale)
+    Вход: state, derivatives, scale.
+    Выход: state + scale * derivatives.
+
+  - fnv1a64(text)
+    Вход: строка.
+    Выход: uint64 hash.
+
+
+15. src/models/glv_dynamics.h и .cpp
+------------------------------------
+
+Назначение: generalized Lotka-Volterra.
+Формула: dN_i/dt = N_i * (r_i + sum_j(a_ij*N_j) + b_i*u_i).
+
+Класс: GlvDynamics
+
+Функции:
+  - void configure(const ModelConfig& config)
+    Вход: species, initial_state, growth, sensitivity, interaction_matrix, parameters.
+    Выход: нет.
+    Эффект: настраивает N, r, A, b, u.
+
+  - std::vector<double> computeDerivatives(const std::vector<double>& state, double time) const
+    Вход: state, time.
+    Выход: dN/dt.
+
+  - void setParameter(const std::string& name, double value)
+    Вход: growth.<species>, sensitivity.<species>, interaction.<i>.<j>, external_input.<species>.
+    Выход: нет.
+    Эффект: меняет соответствующий параметр.
+
+  - void applyShock(const std::string& target, double strength)
+    Вход: species target, strength.
+    Выход: нет.
+    Эффект: меняет N target и добавляет flag.
+
+  - std::map<std::string, double> getMetrics() const
+    Вход: нет.
+    Выход: biomass_total, min_population, max_population, dominant_species_index, species_count.
+
+  - std::string checksum() const
+    Вход: нет.
+    Выход: hash по model/species/state/growth/interaction/sensitivity.
+
+  - std::vector<std::vector<double>> jacobian() const
+    Вход: нет.
+    Выход: матрица Якоби.
+
+  - std::optional<std::vector<double>> equilibriumCandidate() const
+    Вход: нет.
+    Выход: N* для r + A*N = 0 или nullopt.
+
+  - const std::vector<std::string>& getFlags() const
+    Вход: нет.
+    Выход: flags_.
+
+  - speciesIndex(name)
+    Вход: имя вида.
+    Выход: optional index.
+
+  - applyKnownParameter(name, value)
+    Вход: имя параметра, значение.
+    Выход: нет.
+    Эффект: применяет известный параметр к r/b/A/u.
+
+  - resizeParameters(species_count)
+    Вход: число видов.
+    Выход: нет.
+    Эффект: задает размеры r/A/b/u/flags.
+
+
+16. src/models/rosenzweig_macarthur_dynamics.h и .cpp
+-----------------------------------------------------
+
+Назначение: predator-prey модель Rosenzweig-MacArthur.
+
+Класс: RosenzweigMacArthurDynamics
+
+Функции:
+  - void configure(const ModelConfig& config)
+    Вход: ModelConfig с двумя видами и parameters.
+    Выход: нет.
+    Эффект: настраивает prey/predator state и параметры r,K,a,h,e,m.
+
+  - std::vector<double> computeDerivatives(const std::vector<double>& state, double time) const
+    Вход: state = [prey, predator], time.
+    Выход: [dX/dt, dY/dt].
+
+  - void setParameter(const std::string& name, double value)
+    Вход: r/K/a/h/e/m или alias.
+    Выход: нет.
+    Эффект: меняет параметр и валидирует.
+
+  - void applyShock(const std::string& target, double strength)
+    Вход: prey/predator target, strength.
+    Выход: нет.
+    Эффект: меняет state и добавляет flag.
+
+  - std::map<std::string, double> getMetrics() const
+    Вход: нет.
+    Выход: biomass_total, phase_x, phase_y, prey, predator.
+
+  - std::string checksum() const
+    Вход: нет.
+    Выход: hash по model/species/state/r/K/a/h/e/m.
+
+  - std::array<std::array<double, 2>, 2> jacobian2x2() const
+    Вход: нет.
+    Выход: 2x2 Jacobian.
+
+  - std::optional<std::vector<double>> equilibriumCandidate() const
+    Вход: нет.
+    Выход: положительная equilibrium candidate или nullopt.
+
+  - const std::vector<std::string>& getFlags() const
+    Вход: нет.
+    Выход: flags_.
+
+  - applyKnownParameter(name, value)
+    Вход: имя параметра, значение.
+    Выход: нет.
+    Эффект: применяет r/K/a/h/e/m.
+
+  - validateParameters() const
+    Вход: нет.
+    Выход: нет.
+    Эффект: бросает исключение при некорректных параметрах.
+
+  - matchesPrey(target) const
+    Вход: target.
+    Выход: true, если это prey.
+
+  - matchesPredator(target) const
+    Вход: target.
+    Выход: true, если это predator.
+
+
+17. src/models/model_dynamics_factory.h и .cpp
+----------------------------------------------
+
+Назначение: фабрика математических моделей по model_id.
+
+Функции:
+  - isGlvModelId(model_id)
+    Вход: строка.
+    Выход: true для glv/generalized_lotka_volterra.
+
+  - isRosenzweigMacArthurModelId(model_id)
+    Вход: строка.
+    Выход: true для rosenzweig_macarthur/rm.
+
+  - bool isSupportedModelId(const std::string& model_id)
+    Вход: model_id.
+    Выход: true, если модель поддерживается.
+
+  - std::unique_ptr<IModelDynamics> createModelDynamics(const std::string& model_id)
+    Вход: model_id.
+    Выход: unique_ptr<IModelDynamics>.
+    Эффект: создает GlvDynamics или RosenzweigMacArthurDynamics; бросает исключение для неизвестной модели.
+
+
+18. src/modules/world_port.h
+----------------------------
+
+Назначение: интерфейс доступа к миру.
+
+Структуры:
+  - ReadModel: tick, time, dt, seed, scenario_id, model_id, integrator, species_names, state_vector, metrics, checksum, flags, population_by_species, energy_total.
+  - WorldCommand: command, params string->string, numeric_params string->double.
+
+Класс: IWorldPort
+
+Функции:
+  - virtual void enqueueCommand(const std::string& command, const std::map<std::string,std::string>& params)
+    Вход: команда, строковые параметры.
+    Выход: нет.
+    Эффект: ставит команду в мир.
+
+  - virtual void enqueueCommand(const WorldCommand& command)
+    Вход: типизированная команда.
+    Выход: нет.
+    Эффект: default wrapper для строкового enqueueCommand.
+
+  - virtual const ReadModel& readModel() const
+    Вход: нет.
+    Выход: текущая read model.
+
+  - virtual bool shouldStop() const
+    Вход: нет.
+    Выход: true/false.
+
+
+19. src/modules/simulation_world.h и .cpp
+-----------------------------------------
+
+Назначение: модуль мира, хранит состояние симуляции, использует математическую модель, публикует world.tick.
+
+Класс: SimulationWorld
+
+Функции:
+  - SimulationWorld(const ModuleInstanceConfig& instance, ModuleContext& context)
+    Вход: instance config, context.
+    Выход: объект мира.
+
+  - const std::string& typeId() const
+    Вход: нет.
+    Выход: type_id_.
+
+  - const std::string& instanceId() const
+    Вход: нет.
+    Выход: instance_id_.
+
+  - void onInit()
+    Вход: нет.
+    Выход: нет.
+    Эффект: инициализирует read model, dt, seed, flags.
+
+  - void onPreTick()
+    Вход: pending_commands_.
+    Выход: нет.
+    Эффект: применяет команды перед tick.
+
+  - void onTick()
+    Вход: текущее состояние мира.
+    Выход: нет.
+    Эффект: делает шаг dynamics_ или legacy state, обновляет ReadModel, emit world.tick.
+
+  - void enqueueCommand(const std::string& command, const std::map<std::string,std::string>& params)
+    Вход: command, params.
+    Выход: нет.
+    Эффект: кладет команду в очередь.
+
+  - void enqueueCommand(const WorldCommand& command)
+    Вход: WorldCommand.
+    Выход: нет.
+    Эффект: кладет команду в очередь.
+
+  - const ReadModel& readModel() const
+    Вход: нет.
+    Выход: read_model_.
+
+  - bool shouldStop() const
+    Вход: нет.
+    Выход: true, если достигнут stop_at_tick_.
+
+  - std::string checksum() const
+    Вход: нет.
+    Выход: checksum dynamics_ или legacy checksum.
+
+  - applyCommand(command)
+    Вход: WorldCommand.
+    Выход: нет.
+    Эффект: обрабатывает world.reset, world.configure, spawn, set_param, apply_shock, stop.at_tick.
+
+  - updateReadModel()
+    Вход: state мира/dynamics.
+    Выход: нет.
+    Эффект: заполняет tick/time/dt/seed/model/species/state/metrics/checksum/flags.
+
+  - syncLegacyDerivedState()
+    Вход: population_by_species.
+    Выход: нет.
+    Эффект: обновляет state_vector, species_names, metrics и energy_total для legacy-режима.
+
+  - emitTickEvent()
+    Вход: read_model_.
+    Выход: нет.
+    Эффект: создает SimulationEvent world.tick с payload и typed payload.
+
+  - legacyChecksum() const
+    Вход: legacy state.
+    Выход: checksum string.
+
+
+20. src/modules/scenario_runner.h и .cpp
+----------------------------------------
+
+Назначение: исполняет ScenarioTimeline и отправляет команды миру.
+
+Класс: ScenarioRunner
+
+Функции:
+  - ScenarioRunner(const ModuleInstanceConfig& instance, ModuleContext& context)
+    Вход: instance config, context.
+    Выход: объект runner.
+
+  - const std::string& typeId() const
+    Вход: нет.
+    Выход: type_id_.
+
+  - const std::string& instanceId() const
+    Вход: нет.
+    Выход: instance_id_.
+
+  - void onStart()
+    Вход: scenario config, world pointer.
+    Выход: нет.
+    Эффект: проверяет requires, отправляет world.reset, world.configure, stop.at_tick.
+
+  - void onPreTick()
+    Вход: текущий tick из world->readModel().
+    Выход: нет.
+    Эффект: отправляет actionsForTick(tick) в мир.
+
+  - void setWorld(IWorldPort* world)
+    Вход: указатель на мир.
+    Выход: нет.
+    Эффект: сохраняет world_.
+
+  - void setAvailableModules(const std::vector<std::string>& modules)
+    Вход: список type_id модулей.
+    Выход: нет.
+    Эффект: сохраняет available_modules_.
+
+  - dispatchAction(action)
+    Вход: ScheduledAction.
+    Выход: нет.
+    Эффект: преобразует action в команду мира.
+
+
+21. src/modules/recorder_csv.h и .cpp
+-------------------------------------
+
+Назначение: запись world.tick в CSV или память.
+
+Класс: RecorderCsv
+
+Функции:
+  - RecorderCsv(const ModuleInstanceConfig& instance, ModuleContext& context)
+    Вход: instance config, context.
+    Выход: объект recorder.
+    Эффект: читает params sink/path.
+
+  - const std::string& typeId() const
+    Вход: нет.
+    Выход: type_id_.
+
+  - const std::string& instanceId() const
+    Вход: нет.
+    Выход: instance_id_.
+
+  - void onStart()
+    Вход: AppConfig output_dir, params.
+    Выход: нет.
+    Эффект: открывает CSV, подписывается на world.tick.
+
+  - void onStop()
+    Вход: нет.
+    Выход: нет.
+    Эффект: закрывает файл.
+
+  - const std::vector<SimulationEvent>& events() const
+    Вход: нет.
+    Выход: события в памяти.
+
+  - const std::vector<std::string>& csvLines() const
+    Вход: нет.
+    Выход: строки CSV в памяти.
+
+  - handleEvent(event)
+    Вход: SimulationEvent.
+    Выход: нет.
+    Эффект: сохраняет событие и пишет CSV.
+
+  - writeCsvForEvent(event)
+    Вход: SimulationEvent.
+    Выход: нет.
+    Эффект: инициализирует header и добавляет строку.
+
+  - initializeCsvHeader(event)
+    Вход: первое событие.
+    Выход: нет.
+    Эффект: выбирает legacy или extended CSV columns.
+
+  - buildCsvRow(event) const
+    Вход: extended SimulationEvent.
+    Выход: CSV row string.
+
+  - buildLegacyCsvRow(event) const
+    Вход: legacy SimulationEvent.
+    Выход: CSV row string tick,seed,energy_total.
+
+  - appendCsvLine(line)
+    Вход: строка CSV.
+    Выход: нет.
+    Эффект: сохраняет строку и пишет в файл.
+
+  - ecosimRegisterModule(registry)
+    Вход: ModuleRegistry.
+    Выход: нет.
+    Эффект: регистрирует factory type "recorder".
+
+Внутренние helper-функции recorder_csv.cpp:
+  - formatDouble(value): double -> string.
+  - csvEscape(value): string -> escaped CSV cell.
+  - joinCsv(values): vector<string> -> CSV line.
+  - joinPipe(values): vector<string> -> pipe-separated string.
+  - getPayloadString(event,key): SimulationEvent+key -> string.
+  - getRequiredValue(event,column): SimulationEvent+column -> string.
+  - getSpeciesNames(event): SimulationEvent -> vector<string>.
+  - getStateVector(event): SimulationEvent -> vector<double>.
+  - hasExtendedPayload(event): SimulationEvent -> bool.
+
+
+22. src/modules/agent_behavoir.h и .cpp
+---------------------------------------
+
+Назначение: placeholder/пример модуля agent_behavoir.
+
+Класс: AgentBehavoir
+
+Функции:
+  - AgentBehavoir(const ModuleInstanceConfig& instance, ModuleContext& context)
+    Вход: instance config, context.
+    Выход: объект AgentBehavoir.
+
+  - const std::string& typeId() const
+    Вход: нет.
+    Выход: type_id_.
+
+  - const std::string& instanceId() const
+    Вход: нет.
+    Выход: instance_id_.
+
+  - void onInit()
+    Вход: нет.
+    Выход: нет.
+    Эффект: логирует инициализацию.
+
+  - void onTick()
+    Вход: нет.
+    Выход: нет.
+    Эффект: tick hook placeholder.
+
+
+23. Конфигурационные файлы configs/
+-----------------------------------
+
+Файл: configs/app.toml
+Назначение: базовый app-конфиг.
+Входные данные: mode, error_policy, modules_dir, scenario_path, output_dir, dt, max_ticks, instances.
+Выходные данные: AppConfig для Application.
+Функций нет.
+
+Файл: configs/scenario.toml
+Назначение: базовый legacy-сценарий.
+Входные данные: seed, stop_at_tick, requires, schedule spawn.
+Выходные данные: ScenarioConfig.
+Функций нет.
+
+Файл: configs/examples/app_glv.toml
+Назначение: app-конфиг для gLV примера.
+Входные данные: modules_dir, scenario_path, output_dir, instances.
+Выходные данные: AppConfig.
+
+Файл: configs/examples/app_rm.toml
+Назначение: app-конфиг для RM примера.
+Входные данные: modules_dir, scenario_path, output_dir, instances.
+Выходные данные: AppConfig.
+
+Файл: configs/examples/glv_three_species_euler.toml
+Назначение: gLV сценарий grass/rabbit/fox с Euler.
+Входные данные: species, initial_state, growth, sensitivity, interaction_matrix, schedule.
+Выходные данные: ScenarioConfig/ModelConfig.
+
+Файл: configs/examples/glv_three_species_rk4.toml
+Назначение: gLV сценарий grass/rabbit/fox с RK4.
+Входные данные: аналогично Euler-сценарию, integrator = rk4.
+Выходные данные: ScenarioConfig/ModelConfig.
+
+Файл: configs/examples/rm_predator_prey.toml
+Назначение: RM predator-prey сценарий.
+Входные данные: prey/predator initial_state и параметры r,K,a,h,e,m.
+Выходные данные: ScenarioConfig/ModelConfig.
+
+Файл: configs/examples/rm_shock.toml
+Назначение: RM сценарий с shock/set_param.
+Входные данные: RM параметры и schedule.
+Выходные данные: ScenarioConfig/ModelConfig.
+
+
+24. modules/
+------------
+
+Файл: modules/simulation_world/manifest.toml
+Назначение: manifest модуля simulation_world.
+Входные данные: type_id/version/dependencies/criticality.
+Выходные данные: ModuleManifest.
+
+Файл: modules/scenario/manifest.toml
+Назначение: manifest модуля scenario.
+Входные данные: зависимости от simulation_world.
+Выходные данные: ModuleManifest.
+
+Файл: modules/recorder/manifest.toml
+Назначение: manifest recorder.
+Входные данные: путь к recorder_csv.dll и metadata.
+Выходные данные: ModuleManifest.
+
+Файл: modules/agent_behavoir/manifest.toml
+Назначение: manifest placeholder agent module.
+Выходные данные: ModuleManifest.
+
+Файлы modules/recorder/recorder_csv.dll, .lib, .exp, .pdb
+Назначение: build artifacts recorder module для Windows.
+Функции:
+  - DLL экспортирует ecosimRegisterModule.
+Вход: ModuleRegistry.
+Выход: нет.
+Эффект: регистрирует factory recorder.
+
+
+25. tests/integration/
+----------------------
+
+Файл: tests/integration/run_integration_tests.cpp
+Назначение: main для интеграционного runner.
+Функции:
+  - main()
+    Вход: нет.
+    Выход: 0 если все тесты passed, 1 если есть error.
+    Эффект: вызывает buildIntegrationTests(), запускает каждый IIntegrationTest::run(), печатает summary.
+
+Файл: tests/integration/test_framework.h/.cpp
+Назначение: общий test framework и helpers.
+Функции:
+  - repoRoot()
+    Вход: нет.
+    Выход: runtime base path.
+
+  - writeScenarioFile(file_name, seed, stop_at_tick, requires, schedule)
+    Вход: имя файла, seed, stop_at_tick, requires, schedule.
+    Выход: путь к созданному scenario TOML.
+    Эффект: пишет тестовый сценарий.
+
+  - writeAppConfigFile(file_name, scenario_path, max_ticks, instances)
+    Вход: имя файла, путь сценария, max_ticks, module instances.
+    Выход: путь к app TOML.
+    Эффект: пишет тестовый app-config.
+
+  - containsText(log, needle)
+    Вход: строка log, needle.
+    Выход: bool.
+
+Файл: tests/integration/test_cases.h/.cpp
+Назначение: registry интеграционных тестов.
+Функции:
+  - buildIntegrationTests()
+    Вход: нет.
+    Выход: vector<unique_ptr<IIntegrationTest>>.
+    Эффект: создает тесты 1..35.
+
+Файлы test_1_*.cpp ... test_35_*.cpp
+Назначение: отдельные интеграционные тесты.
+Общий шаблон функций:
+  - TestClass::run()
+    Вход: нет; тест сам создает конфиги/модули/модели.
+    Выход: TestResult {name, passed, details}.
+    Эффект: проверяет конкретное поведение.
+
+  - make<Name>Test()
+    Вход: нет.
+    Выход: unique_ptr<IIntegrationTest>.
+    Эффект: создает объект теста.
+
+Список тестовых файлов:
+  - test_1_dependency_resolution.cpp: зависимости модулей и policy.
+  - test_2_spawn_phase.cpp: spawn применяется в onPreTick.
+  - test_3_event_buffering.cpp: EventBus доставляет события только через deliverBuffered.
+  - test_4_stop_condition.cpp: stop_at_tick.
+  - test_5_recorder_isolation.cpp: recorder не меняет состояние симуляции.
+  - test_6_reproducibility.cpp: детерминированность.
+  - test_7_scenario_parsing.cpp: legacy/gLV/RM/invalid model parsing.
+  - test_8_world_tick_contract.cpp: расширенный ReadModel/world.tick.
+  - test_9_model_dynamics.cpp: базовый интегратор Euler/RK4/clamp/checksum.
+  - test_10_glv_derivatives.cpp: gLV производные.
+  - test_11_glv_euler_step.cpp: gLV Euler.
+  - test_12_glv_rk4_step.cpp: gLV RK4.
+  - test_13_glv_jacobian.cpp: gLV Jacobian/equilibrium.
+  - test_14_glv_set_param.cpp: gLV setParameter.
+  - test_15_glv_apply_shock.cpp: gLV shock.
+  - test_16_glv_checksum.cpp: gLV checksum.
+  - test_17_rm_derivatives.cpp: RM derivatives.
+  - test_18_rm_euler_step.cpp: RM Euler.
+  - test_19_rm_rk4_step.cpp: RM RK4.
+  - test_20_rm_set_param.cpp: RM setParameter.
+  - test_21_rm_apply_shock.cpp: RM shock.
+  - test_22_rm_jacobian.cpp: RM Jacobian.
+  - test_23_rm_equilibrium.cpp: RM equilibrium.
+  - test_24_rm_checksum.cpp: RM checksum.
+  - test_25_model_dynamics_factory.cpp: factory model id mapping.
+  - test_26_world_glv_uses_dynamics.cpp: SimulationWorld использует gLV dynamics.
+  - test_27_world_rm_uses_dynamics.cpp: SimulationWorld использует RM dynamics.
+  - test_28_world_set_param_affects_dynamics.cpp: set_param влияет на dynamics.
+  - test_29_world_apply_shock_affects_state.cpp: apply_shock влияет на state.
+  - test_30_world_spawn_uses_apply_shock.cpp: spawn работает через applyShock.
+  - test_31_world_stop_at_tick.cpp: остановка мира.
+  - test_32_world_determinism_with_dynamics.cpp: детерминизм с dynamics.
+  - test_33_scenario_runner_e2e.cpp: TOML -> ScenarioRunner -> World.
+  - test_34_recorder_csv_extended.cpp: расширенный CSV.
+  - test_35_examples_toml_to_csv.cpp: демонстрационные TOML пишут CSV.
+
+
+26. tests/data/
+---------------
+
+Назначение: тестовые TOML-данные.
+
+Файлы app_*.toml:
+  - входные app-конфиги для Application/ModuleManager тестов.
+  - функций нет.
+  - выход: AppConfig.
+
+Файлы scenario_*.toml:
+  - входные сценарии для ConfigLoader, ScenarioRunner, SimulationWorld.
+  - функций нет.
+  - выход: ScenarioConfig.
+
+Файлы tests/data/modules/*/manifest.toml:
+  - тестовые manifests модулей.
+  - функций нет.
+  - выход: ModuleManifest.
+
+
+27. docs/
+---------
+
+Файл: docs/implementation_status.md
+Назначение: статус реализации проекта на момент анализа.
+Функций нет.
+
+Файл: docs/15update.txt
+Назначение: сводка предыдущих этапов разработки и описание модулей.
+Функций нет.
+
+Файл: docs/lastupdate.txt
+Назначение: текущий подробный справочник по файлам проекта.
+Функций нет.
+
+
+28. Основные runtime-потоки данных
+----------------------------------
+
+App config:
+  app.toml -> ConfigLoader::loadAppConfig -> AppConfig -> Application/ModuleManager.
+
+Scenario:
+  scenario.toml -> ConfigLoader::loadScenario -> ScenarioConfig -> ScenarioTimeline -> ScenarioRunner.
+
+Модель:
+  ScenarioConfig.model -> createModelDynamics(model_id) -> IModelDynamics::configure -> SimulationWorld::dynamics_.
+
+Tick:
+  Application::runHeadless -> module.onPreTick -> module.onTick -> module.onPostTick -> EventBus::deliverBuffered.
+
+World event:
+  SimulationWorld::emitTickEvent -> EventBus::emit -> RecorderCsv::handleEvent после deliverBuffered.
+
+CSV:
+  SimulationEvent world.tick -> RecorderCsv::initializeCsvHeader/buildCsvRow -> output/simulation.csv.
+

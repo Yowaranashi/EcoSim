@@ -14,6 +14,7 @@ namespace ecosim {
 class Application {
 public:
     explicit Application(Logger &logger);
+    ~Application();
 
     bool initialize(const std::string &config_path);
     bool startModules();

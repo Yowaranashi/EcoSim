@@ -26,6 +26,7 @@ void EventBus::deliverBuffered() {
 
 void EventBus::clear() {
     buffer_.clear();
+    subscribers_.clear();
 }
 
 std::size_t EventBus::bufferedCount() const {

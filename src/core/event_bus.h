@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -11,6 +12,11 @@ struct SimulationEvent {
     std::string type;
     int tick = 0;
     std::unordered_map<std::string, std::string> payload;
+    std::unordered_map<std::string, double> numeric_payload;
+    std::unordered_map<std::string, std::vector<std::string>> string_list_payload;
+    std::unordered_map<std::string, std::vector<double>> numeric_vector_payload;
+    std::map<std::string, double> metrics;
+    std::vector<std::string> flags;
 };
 
 class EventBus {

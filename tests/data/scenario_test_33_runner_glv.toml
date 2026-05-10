@@ -1,0 +1,20 @@
+
+scenario_id = "runner-glv"
+model = "glv"
+seed = 42
+dt = 0.1
+stop_at_tick = 3
+integrator = "euler"
+requires = ["simulation_world"]
+species = [
+  { id = "rabbit", initial_state = 10.0 },
+  { id = "fox", initial_state = 2.0 }
+]
+growth = { rabbit = 0.0, fox = -0.3 }
+sensitivity = { rabbit = 1.0, fox = 0.0 }
+parameters = { input.rabbit = 1.0 }
+interaction_matrix = [
+  [ 0.0, 0.0 ],
+  [ 0.0, 0.0 ]
+]
+schedule = []

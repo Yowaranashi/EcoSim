@@ -1,0 +1,14 @@
+
+scenario_id = "runner-rm"
+model = "rosenzweig_macarthur"
+seed = 77
+dt = 0.1
+stop_at_tick = 3
+integrator = "rk4"
+requires = ["simulation_world"]
+species = [
+  { id = "prey", initial_state = 10.0 },
+  { id = "predator", initial_state = 5.0 }
+]
+parameters = { r = 1.0, K = 100.0, a = 0.1, h = 0.2, e = 0.5, m = 0.2 }
+schedule = []

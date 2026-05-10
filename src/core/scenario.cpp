@@ -4,8 +4,8 @@
 namespace ecosim {
 
 ScenarioTimeline::ScenarioTimeline(ScenarioConfig config) : config_(std::move(config)) {
-    std::sort(config_.schedule.begin(), config_.schedule.end(),
-              [](const auto &a, const auto &b) { return a.tick < b.tick; });
+    std::stable_sort(config_.schedule.begin(), config_.schedule.end(),
+                     [](const auto &a, const auto &b) { return a.tick < b.tick; });
 }
 
 std::vector<ScenarioConfig::ScheduledAction> ScenarioTimeline::actionsForTick(int tick) const {

@@ -19,9 +19,15 @@ public:
     void onStop() override;
 
     const std::vector<SimulationEvent> &events() const { return events_; }
+    const std::vector<std::string> &csvLines() const { return csv_lines_; }
 
 private:
     void handleEvent(const SimulationEvent &event);
+    void writeCsvForEvent(const SimulationEvent &event);
+    void initializeCsvHeader(const SimulationEvent &event);
+    std::string buildCsvRow(const SimulationEvent &event) const;
+    std::string buildLegacyCsvRow(const SimulationEvent &event) const;
+    void appendCsvLine(const std::string &line);
 
     std::string type_id_;
     std::string instance_id_;
@@ -30,6 +36,12 @@ private:
     bool memory_only_ = false;
     std::ofstream file_;
     std::vector<SimulationEvent> events_;
+    std::vector<std::string> csv_lines_;
+    std::vector<std::string> csv_header_;
+    std::vector<std::string> state_species_;
+    std::vector<std::string> metric_names_;
+    bool csv_header_written_ = false;
+    bool legacy_csv_format_ = false;
 };
 
 } // namespace ecosim

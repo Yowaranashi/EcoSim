@@ -2,8 +2,11 @@
 
 #include "core/module.h"
 #include "modules/world_port.h"
+#include "models/integration_method.h"
+#include "models/model_dynamics.h"
 
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -22,14 +25,18 @@ public:
 
     void enqueueCommand(const std::string &command,
                         const std::map<std::string, std::string> &params) override;
+    void enqueueCommand(const WorldCommand &command) override;
 
     const ReadModel &readModel() const override { return read_model_; }
     bool shouldStop() const override;
     std::string checksum() const;
 
 private:
-    void applyCommand(const std::string &command, const std::map<std::string, std::string> &params);
+    void applyCommand(const WorldCommand &command);
+    void updateReadModel();
+    void syncLegacyDerivedState();
     void emitTickEvent();
+    std::string legacyChecksum() const;
 
     std::string type_id_;
     std::string instance_id_;
@@ -37,8 +44,16 @@ private:
     ReadModel read_model_;
     std::map<std::string, double> params_;
     std::vector<std::string> species_order_;
-    std::vector<std::pair<std::string, std::map<std::string, std::string>>> pending_commands_;
+    std::vector<WorldCommand> pending_commands_;
+    std::unique_ptr<IModelDynamics> dynamics_;
+    IntegrationMethod integration_method_ = IntegrationMethod::Euler;
+    double dt_ = 1.0;
+    int seed_ = 0;
     int stop_at_tick_ = -1;
+    std::string scenario_id_;
+    std::string model_id_;
+    std::string integrator_;
+    std::vector<std::string> flags_;
 };
 
 } // namespace ecosim

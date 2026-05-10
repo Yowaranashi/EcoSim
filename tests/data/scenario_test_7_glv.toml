@@ -1,0 +1,21 @@
+
+scenario_id = "glv-basic"
+model = "glv"
+seed = 123
+dt = 0.25
+stop_at_tick = 10
+integrator = "rk4"
+species = [
+  { id = "prey", initial_state = 20.0, parameters = { growth_rate = 1.1 } },
+  { id = "predator", initial_state = 5.0, parameters = { mortality = 0.4 } }
+]
+parameters = { carrying_capacity = 100.0 }
+interaction_matrix = [
+  [ 0.2, -0.1 ],
+  [ 0.05, -0.3 ]
+]
+schedule = [
+  { tick = 2, command = "set_param", species = "prey", name = "growth_rate", value = 1.2 },
+  { tick = 3, command = "apply_shock", species = "predator", amount = -1.0 },
+  { tick = 4, command = "spawn", species = "prey", count = 7 }
+]

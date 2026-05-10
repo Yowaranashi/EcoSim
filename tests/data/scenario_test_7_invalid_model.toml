@@ -1,0 +1,4 @@
+
+model = "unsupported_model"
+seed = 1
+stop_at_tick = 1

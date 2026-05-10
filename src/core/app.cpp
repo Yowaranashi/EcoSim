@@ -15,6 +15,10 @@ namespace ecosim {
 Application::Application(Logger &logger)
     : logger_(logger), context_(logger_, event_bus_, app_config_), module_manager_(registry_, context_) {}
 
+Application::~Application() {
+    event_bus_.clear();
+}
+
 bool Application::initialize(const std::string &config_path) {
     logger_.log(LogChannel::System, "Loading app config: " + config_path);
     app_config_ = ConfigLoader::loadAppConfig(config_path);

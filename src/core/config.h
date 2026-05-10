@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/scenario.h"
+
 #include <map>
 #include <optional>
 #include <string>
@@ -35,18 +37,6 @@ struct AppConfig {
     std::string output_dir = "output";
     double dt = 1.0;
     std::optional<int> max_ticks;
-};
-
-struct ScenarioConfig {
-    int seed = 0;
-    int stop_at_tick = 0;
-    std::vector<std::string> requires;
-    struct ScheduledAction {
-        int tick = 0;
-        std::string command;
-        std::map<std::string, std::string> params;
-    };
-    std::vector<ScheduledAction> schedule;
 };
 
 class ConfigLoader {

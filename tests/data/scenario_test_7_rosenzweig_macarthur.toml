@@ -1,0 +1,17 @@
+
+scenario_id = "rm-basic"
+model = "rosenzweig_macarthur"
+seed = 77
+dt = 0.1
+stop_at_tick = 20
+integrator = "euler"
+initial_state = { resource = 30.0, consumer = 4.0 }
+parameters = { resource_growth = 1.0, carrying_capacity = 50.0, attack_rate = 0.2, handling_time = 0.1 }
+species = [
+  { id = "resource", initial_state = 30.0 },
+  { id = "consumer", initial_state = 4.0, parameters = { mortality = 0.3, conversion_efficiency = 0.5 } }
+]
+schedule = [
+  { tick = 5, command = "set_param", name = "attack_rate", value = 0.25 },
+  { tick = 6, command = "apply_shock", species = "resource", amount = -3.0 }
+]

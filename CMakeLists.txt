@@ -6,6 +6,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 enable_testing()
 
+add_library(ecosim_models
+    src/models/glv_dynamics.cpp
+    src/models/model_dynamics_factory.cpp
+    src/models/model_dynamics_base.cpp
+    src/models/rosenzweig_macarthur_dynamics.cpp
+)
+target_include_directories(ecosim_models PUBLIC src)
+
 add_library(ecosim_core
     src/core/app.cpp
     src/core/console.cpp
@@ -45,7 +53,7 @@ target_include_directories(recorder_csv_static PUBLIC src)
 target_link_libraries(recorder_csv_static PRIVATE ecosim_core)
 
 add_executable(ecosim src/main.cpp)
-target_link_libraries(ecosim PRIVATE ecosim_core)
+target_link_libraries(ecosim PRIVATE ecosim_core ecosim_models)
 
 add_executable(ecosim_integration_tests
     tests/integration/run_integration_tests.cpp
@@ -57,10 +65,40 @@ add_executable(ecosim_integration_tests
     tests/integration/test_4_stop_condition.cpp
     tests/integration/test_5_recorder_isolation.cpp
     tests/integration/test_6_reproducibility.cpp
+    tests/integration/test_7_scenario_parsing.cpp
+    tests/integration/test_8_world_tick_contract.cpp
+    tests/integration/test_9_model_dynamics.cpp
+    tests/integration/test_10_glv_derivatives.cpp
+    tests/integration/test_11_glv_euler_step.cpp
+    tests/integration/test_12_glv_rk4_step.cpp
+    tests/integration/test_13_glv_jacobian.cpp
+    tests/integration/test_14_glv_set_param.cpp
+    tests/integration/test_15_glv_apply_shock.cpp
+    tests/integration/test_16_glv_checksum.cpp
+    tests/integration/test_17_rm_derivatives.cpp
+    tests/integration/test_18_rm_euler_step.cpp
+    tests/integration/test_19_rm_rk4_step.cpp
+    tests/integration/test_20_rm_set_param.cpp
+    tests/integration/test_21_rm_apply_shock.cpp
+    tests/integration/test_22_rm_jacobian.cpp
+    tests/integration/test_23_rm_equilibrium.cpp
+    tests/integration/test_24_rm_checksum.cpp
+    tests/integration/test_25_model_dynamics_factory.cpp
+    tests/integration/test_26_world_glv_uses_dynamics.cpp
+    tests/integration/test_27_world_rm_uses_dynamics.cpp
+    tests/integration/test_28_world_set_param_affects_dynamics.cpp
+    tests/integration/test_29_world_apply_shock_affects_state.cpp
+    tests/integration/test_30_world_spawn_uses_apply_shock.cpp
+    tests/integration/test_31_world_stop_at_tick.cpp
+    tests/integration/test_32_world_determinism_with_dynamics.cpp
+    tests/integration/test_33_scenario_runner_e2e.cpp
+    tests/integration/test_34_recorder_csv_extended.cpp
+    tests/integration/test_35_examples_toml_to_csv.cpp
 )
-target_link_libraries(ecosim_integration_tests PRIVATE ecosim_core recorder_csv_static)
+target_link_libraries(ecosim_integration_tests PRIVATE ecosim_core recorder_csv_static ecosim_models)
 target_include_directories(ecosim_integration_tests PRIVATE ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME ecosim_integration_tests COMMAND ecosim_integration_tests)
+set_tests_properties(ecosim_integration_tests PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 include(GNUInstallDirs)
 include(InstallRequiredSystemLibraries)

@@ -1,0 +1,6 @@
+seed = 11
+stop_at_tick = 2
+requires = ["simulation_world"]
+schedule = [
+  { command = "spawn", count = 2, species = "boar", tick = 1 },
+]

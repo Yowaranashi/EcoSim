@@ -34,6 +34,7 @@ std::filesystem::path resolveLibraryPath(const std::filesystem::path &path) {
 } // namespace
 
 ModuleRegistry::~ModuleRegistry() {
+    factories_.clear();
     for (auto &library : libraries_) {
         if (!library.handle) {
             continue;
@@ -49,6 +50,7 @@ ModuleRegistry::~ModuleRegistry() {
 
 void ModuleRegistry::loadManifests(const std::filesystem::path &modules_dir) {
     manifests_.clear();
+    factories_.clear();
     for (auto &library : libraries_) {
         if (!library.handle) {
             continue;
