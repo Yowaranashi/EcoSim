@@ -1,0 +1,22 @@
+scenario_id = "scenario_rm_rk4"
+seed = 42
+model = "rosenzweig_macarthur"
+integrator = "rk4"
+dt = 0.05
+stop_at_tick = 200
+requires = ["simulation_world", "recorder"]
+
+initial_state = { prey = 30.0, predator = 5.0 }
+
+params = {
+  r = 1.0,
+  K = 100.0,
+  a = 0.08,
+  h = 0.2,
+  e = 0.4,
+  m = 0.3
+}
+
+schedule = [
+  { tick = 80, command = "apply_shock", target = "prey", value = -8.0 }
+]

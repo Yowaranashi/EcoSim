@@ -3,6 +3,7 @@
 #include "models/model_dynamics_factory.h"
 
 #include <cctype>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -530,6 +531,9 @@ ScenarioConfig ConfigLoader::loadScenario(const std::string &path) {
     if (auto value = findRawValue(content, "scenario_id")) {
         scenario.scenario_id = stripQuotes(*value);
     }
+    if (scenario.scenario_id.empty()) {
+        scenario.scenario_id = std::filesystem::path(path).stem().string();
+    }
     std::optional<std::string> model_id;
     if (auto value = findRawValue(content, "model")) {
         model_id = stripQuotes(*value);
@@ -578,10 +582,27 @@ ScenarioConfig ConfigLoader::loadScenario(const std::string &path) {
             scenario.model.parameters = parseNumberMap(*value);
         }
     }
+    if (auto value = findRawValue(content, "params")) {
+        if (startsWithInlineMap(*value)) {
+            for (const auto &param : parseNumberMap(*value)) {
+                scenario.model.parameters[param.first] = param.second;
+            }
+        }
+    }
     for (const auto &param : parseNumberTable(content, "parameters")) {
         scenario.model.parameters[param.first] = param.second;
     }
+    for (const auto &param : parseNumberTable(content, "params")) {
+        scenario.model.parameters[param.first] = param.second;
+    }
     if (auto value = findRawValue(content, "growth")) {
+        if (startsWithArray(*value)) {
+            positional_growth = parseArrayNumbers(*value);
+        } else {
+            mergeQualifiedNumberMap(scenario.model.parameters, "growth", parseNumberMap(*value));
+        }
+    }
+    if (auto value = findRawValue(content, "growth_rates")) {
         if (startsWithArray(*value)) {
             positional_growth = parseArrayNumbers(*value);
         } else {

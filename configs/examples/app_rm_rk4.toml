@@ -1,0 +1,12 @@
+mode = "headless"
+error_policy = "fail-fast"
+modules_dir = "../../modules"
+scenario_path = "scenario_rm_rk4.toml"
+output_dir = "../../output/examples"
+max_ticks = 250
+
+instances = [
+  { type = "simulation_world", id = "default", enable = true },
+  { type = "recorder", id = "csv", enable = true, params = { sink = "csv" } },
+  { type = "scenario", id = "default", enable = true }
+]

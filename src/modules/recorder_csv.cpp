@@ -23,6 +23,7 @@ const std::vector<std::string> kKnownMetrics = {
     "species_count",
     "prey",
     "predator",
+    "predation_flow",
     "phase_x",
     "phase_y",
 };

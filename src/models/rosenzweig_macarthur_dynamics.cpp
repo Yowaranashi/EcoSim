@@ -155,10 +155,17 @@ std::map<std::string, double> RosenzweigMacArthurDynamics::getMetrics() const {
         throw std::runtime_error("Rosenzweig-MacArthur state vector must contain prey and predator");
     }
 
+    const double denominator = 1.0 + a_ * h_ * state_[0];
+    if (std::abs(denominator) < kDenominatorEpsilon) {
+        throw std::runtime_error("Rosenzweig-MacArthur functional response denominator is zero");
+    }
+    const double predation_flow = (a_ * state_[0] * state_[1]) / denominator;
+
     return {
         {"biomass_total", state_[0] + state_[1]},
         {"phase_x", state_[0]},
         {"phase_y", state_[1]},
+        {"predation_flow", predation_flow},
         {"predator", state_[1]},
         {"prey", state_[0]},
     };

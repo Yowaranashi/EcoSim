@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
+#include <iomanip>
 #include <sstream>
 #include <stdexcept>
 
@@ -294,6 +296,15 @@ double sumValues(const std::vector<double> &values) {
     }
     return total;
 }
+
+std::uint64_t fnv1a64(const std::string &text) {
+    std::uint64_t hash = 14695981039346656037ull;
+    for (unsigned char ch : text) {
+        hash ^= static_cast<std::uint64_t>(ch);
+        hash *= 1099511628211ull;
+    }
+    return hash;
+}
 } // namespace
 
 SimulationWorld::SimulationWorld(const ModuleInstanceConfig &instance, ModuleContext &context)
@@ -424,7 +435,8 @@ void SimulationWorld::applyCommand(const WorldCommand &command) {
         }
     } else if (command.command == "apply_shock") {
         auto target = getStringParam(command, "target", getStringParam(command, "species"));
-        double strength = getNumberParam(command, "strength", getNumberParam(command, "amount", 0.0));
+        double strength =
+            getNumberParam(command, "strength", getNumberParam(command, "amount", getNumberParam(command, "value", 0.0)));
         if (dynamics_) {
             dynamics_->applyShock(target, strength);
         } else if (!target.empty()) {
@@ -485,7 +497,7 @@ void SimulationWorld::updateReadModel() {
         energy = biomass->second;
     }
     read_model_.energy_total = static_cast<int>(std::lround(energy));
-    read_model_.checksum = dynamics_->checksum();
+    read_model_.checksum = checksum();
 }
 
 void SimulationWorld::syncLegacyDerivedState() {
@@ -575,7 +587,24 @@ bool SimulationWorld::shouldStop() const {
 }
 
 std::string SimulationWorld::checksum() const {
-    return dynamics_ ? dynamics_->checksum() : legacyChecksum();
+    if (!dynamics_) {
+        return legacyChecksum();
+    }
+
+    std::ostringstream canonical;
+    canonical << std::setprecision(17);
+    canonical << "tick=" << read_model_.tick << ';';
+    canonical << "time=" << read_model_.time << ';';
+    canonical << "seed=" << seed_ << ';';
+    canonical << "scenario=" << scenario_id_ << ';';
+    canonical << "model=" << model_id_ << ';';
+    canonical << "integrator=" << integrator_ << ';';
+    canonical << "dt=" << dt_ << ';';
+    canonical << "dynamics=" << dynamics_->checksum();
+
+    std::ostringstream output;
+    output << std::hex << fnv1a64(canonical.str());
+    return output.str();
 }
 
 std::string SimulationWorld::legacyChecksum() const {
