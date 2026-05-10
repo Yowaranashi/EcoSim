@@ -14,6 +14,11 @@ add_library(ecosim_models
 )
 target_include_directories(ecosim_models PUBLIC src)
 
+add_library(ecosim_viewer_csv STATIC
+    src/viewer/csv_result_reader.cpp
+)
+target_include_directories(ecosim_viewer_csv PUBLIC src)
+
 add_library(ecosim_core
     src/core/app.cpp
     src/core/console.cpp
@@ -94,11 +99,45 @@ add_executable(ecosim_integration_tests
     tests/integration/test_33_scenario_runner_e2e.cpp
     tests/integration/test_34_recorder_csv_extended.cpp
     tests/integration/test_35_examples_toml_to_csv.cpp
+    tests/integration/test_36_csv_result_reader.cpp
 )
-target_link_libraries(ecosim_integration_tests PRIVATE ecosim_core recorder_csv_static ecosim_models)
+target_link_libraries(ecosim_integration_tests PRIVATE ecosim_core recorder_csv_static ecosim_models ecosim_viewer_csv)
 target_include_directories(ecosim_integration_tests PRIVATE ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME ecosim_integration_tests COMMAND ecosim_integration_tests)
 set_tests_properties(ecosim_integration_tests PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+option(ECOSIM_BUILD_OGRE_VIEWER "Build OGRE result viewer" OFF)
+
+if(ECOSIM_BUILD_OGRE_VIEWER)
+    find_package(OGRE QUIET)
+
+    if(OGRE_FOUND)
+        add_executable(ecosim_ogre_viewer
+            src/viewer/main_ogre_viewer.cpp
+            src/viewer/ogre_ecosystem_viewer.cpp
+        )
+
+        target_include_directories(ecosim_ogre_viewer PRIVATE src)
+        target_link_libraries(ecosim_ogre_viewer PRIVATE ecosim_viewer_csv)
+
+        if(TARGET OGRE::OgreMain)
+            target_link_libraries(ecosim_ogre_viewer PRIVATE OGRE::OgreMain)
+        elseif(TARGET OgreMain)
+            target_link_libraries(ecosim_ogre_viewer PRIVATE OgreMain)
+        elseif(TARGET OGRE::Main)
+            target_link_libraries(ecosim_ogre_viewer PRIVATE OGRE::Main)
+        endif()
+
+        if(OGRE_INCLUDE_DIRS)
+            target_include_directories(ecosim_ogre_viewer PRIVATE ${OGRE_INCLUDE_DIRS})
+        endif()
+        if(OGRE_LIBRARIES)
+            target_link_libraries(ecosim_ogre_viewer PRIVATE ${OGRE_LIBRARIES})
+        endif()
+    else()
+        message(WARNING "OGRE not found: ecosim_ogre_viewer will not be built")
+    endif()
+endif()
 
 include(GNUInstallDirs)
 include(InstallRequiredSystemLibraries)
@@ -110,6 +149,12 @@ endif()
 install(TARGETS ecosim
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+if(TARGET ecosim_ogre_viewer)
+    install(TARGETS ecosim_ogre_viewer
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
 
 install(DIRECTORY configs/
     DESTINATION ${CMAKE_INSTALL_BINDIR}/configs

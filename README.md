@@ -9,6 +9,7 @@ EcoSim - модульная headless-система симуляции экос�
 - `SimulationWorld`: хранит состояние мира, выполняет математическую динамику, публикует `world.tick`.
 - `ScenarioRunner`: читает TOML-сценарий и отправляет команды миру.
 - `RecorderCsv`: пишет расширенный `world.tick` в CSV.
+- Отдельный OGRE viewer для воспроизведения CSV-результатов, если проект собран с `ECOSIM_BUILD_OGRE_VIEWER=ON`.
 - Математический слой в `src/models`, отделенный от модулей приложения.
 - Модели:
   - generalized Lotka-Volterra (`glv`);
@@ -382,6 +383,12 @@ output/examples/simulation.csv
 tick,seed,energy_total
 ```
 
+## OGRE viewer
+
+Viewer является отдельным исполняемым файлом для просмотра готовых CSV-результатов и не участвует в расчете модели. Основной режим симуляции остается headless, а основной UI - консольным.
+
+Документация: [docs/ogre_viewer.md](docs/ogre_viewer.md)
+
 ## Запуск тестов
 
 Все интеграционные тесты собраны в один executable: `ecosim_integration_tests`.
@@ -456,4 +463,3 @@ cmake --build build --target package
 ```
 
 CPack собирает ZIP/TGZ с бинарником, конфигами, модулями и документацией.
-

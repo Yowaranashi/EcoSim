@@ -48,6 +48,7 @@ std::unique_ptr<IIntegrationTest> makeRecorderCsvLegacyEventTest();
 std::unique_ptr<IIntegrationTest> makeRecorderCsvStableColumnsTest();
 std::unique_ptr<IIntegrationTest> makeGlvExampleTomlToCsvTest();
 std::unique_ptr<IIntegrationTest> makeRmExampleTomlToCsvTest();
+std::unique_ptr<IIntegrationTest> makeCsvResultReaderExtendedCsvTest();
 
 std::vector<std::unique_ptr<IIntegrationTest>> buildIntegrationTests() {
     std::vector<std::unique_ptr<IIntegrationTest>> tests;
@@ -95,6 +96,7 @@ std::vector<std::unique_ptr<IIntegrationTest>> buildIntegrationTests() {
     tests.push_back(makeRecorderCsvStableColumnsTest());
     tests.push_back(makeGlvExampleTomlToCsvTest());
     tests.push_back(makeRmExampleTomlToCsvTest());
+    tests.push_back(makeCsvResultReaderExtendedCsvTest());
     return tests;
 }
 
