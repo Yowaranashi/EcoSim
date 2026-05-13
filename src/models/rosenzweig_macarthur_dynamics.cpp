@@ -1,8 +1,9 @@
 #include "models/rosenzweig_macarthur_dynamics.h"
 
+#include "core/utils/hash.h"
+
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
@@ -11,15 +12,6 @@ namespace ecosim {
 
 namespace {
 constexpr double kDenominatorEpsilon = 1e-12;
-
-std::uint64_t fnv1a64(const std::string &text) {
-    std::uint64_t hash = 14695981039346656037ull;
-    for (unsigned char ch : text) {
-        hash ^= static_cast<std::uint64_t>(ch);
-        hash *= 1099511628211ull;
-    }
-    return hash;
-}
 
 std::string suffixAfterDot(const std::string &name) {
     const auto dot = name.rfind('.');
@@ -187,7 +179,7 @@ std::string RosenzweigMacArthurDynamics::checksum() const {
     canonical << "r=" << r_ << ",K=" << K_ << ",a=" << a_ << ",h=" << h_ << ",e=" << e_ << ",m=" << m_;
 
     std::ostringstream output;
-    output << std::hex << fnv1a64(canonical.str());
+    output << std::hex << utils::fnv1a64(canonical.str());
     return output.str();
 }
 

@@ -1,8 +1,9 @@
 #include "models/glv_dynamics.h"
 
+#include "core/utils/hash.h"
+
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -12,15 +13,6 @@ namespace ecosim {
 
 namespace {
 constexpr double kPivotEpsilon = 1e-12;
-
-std::uint64_t fnv1a64(const std::string &text) {
-    std::uint64_t hash = 14695981039346656037ull;
-    for (unsigned char ch : text) {
-        hash ^= static_cast<std::uint64_t>(ch);
-        hash *= 1099511628211ull;
-    }
-    return hash;
-}
 
 std::vector<std::string> splitDots(const std::string &value) {
     std::vector<std::string> parts;
@@ -167,7 +159,7 @@ std::string GlvDynamics::checksum() const {
     }
 
     std::ostringstream output;
-    output << std::hex << fnv1a64(canonical.str());
+    output << std::hex << utils::fnv1a64(canonical.str());
     return output.str();
 }
 

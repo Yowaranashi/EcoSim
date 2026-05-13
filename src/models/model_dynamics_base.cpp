@@ -1,8 +1,9 @@
 #include "models/model_dynamics_base.h"
 
+#include "core/utils/hash.h"
+
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -30,15 +31,6 @@ std::vector<double> addScaled(const std::vector<double> &state,
         result.push_back(state[i] + derivatives[i] * scale);
     }
     return result;
-}
-
-std::uint64_t fnv1a64(const std::string &text) {
-    std::uint64_t hash = 14695981039346656037ull;
-    for (unsigned char ch : text) {
-        hash ^= static_cast<std::uint64_t>(ch);
-        hash *= 1099511628211ull;
-    }
-    return hash;
 }
 } // namespace
 
@@ -171,7 +163,7 @@ std::string ModelDynamicsBase::checksum() const {
     }
 
     std::ostringstream output;
-    output << std::hex << fnv1a64(canonical.str());
+    output << std::hex << utils::fnv1a64(canonical.str());
     return output.str();
 }
 

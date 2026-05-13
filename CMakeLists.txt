@@ -29,6 +29,7 @@ add_library(ecosim_core
     src/core/module_registry.cpp
     src/core/config.cpp
     src/core/scenario.cpp
+    src/core/utils/toml_parser.cpp
     src/modules/agent_behavoir.cpp
     src/modules/scenario_runner.cpp
     src/modules/simulation_world.cpp
@@ -103,7 +104,7 @@ add_executable(ecosim_integration_tests
 )
 target_link_libraries(ecosim_integration_tests PRIVATE ecosim_core recorder_csv_static ecosim_models ecosim_viewer_csv)
 target_include_directories(ecosim_integration_tests PRIVATE ${CMAKE_SOURCE_DIR}/tests)
-add_test(NAME ecosim_integration_tests COMMAND ecosim_integration_tests)
+add_test(NAME ecosim_integration_tests COMMAND $<TARGET_FILE:ecosim_integration_tests>)
 set_tests_properties(ecosim_integration_tests PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 option(ECOSIM_BUILD_OGRE_VIEWER "Build OGRE result viewer" OFF)

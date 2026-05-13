@@ -1,0 +1,106 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "windows-msvc-debug",
+      "displayName": "Windows MSVC Debug",
+      "description": "Visual Studio multi-config Debug build tree.",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/windows-msvc-debug",
+      "cacheVariables": {
+        "ECOSIM_BUILD_OGRE_VIEWER": "OFF"
+      }
+    },
+    {
+      "name": "windows-msvc-release",
+      "displayName": "Windows MSVC Release",
+      "description": "Visual Studio multi-config Release build tree.",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/windows-msvc-release",
+      "cacheVariables": {
+        "ECOSIM_BUILD_OGRE_VIEWER": "OFF"
+      }
+    },
+    {
+      "name": "nmake-release",
+      "displayName": "NMake Release",
+      "description": "Single-config Release build tree for Developer PowerShell or Developer Command Prompt.",
+      "generator": "NMake Makefiles",
+      "binaryDir": "${sourceDir}/build/nmake-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ECOSIM_BUILD_OGRE_VIEWER": "OFF"
+      }
+    },
+    {
+      "name": "ninja-debug",
+      "displayName": "Ninja Debug",
+      "description": "Single-config Debug build tree for environments with Ninja available.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/ninja-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ECOSIM_BUILD_OGRE_VIEWER": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "build-windows-msvc-debug",
+      "configurePreset": "windows-msvc-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "build-windows-msvc-release",
+      "configurePreset": "windows-msvc-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "build-nmake-release",
+      "configurePreset": "nmake-release"
+    },
+    {
+      "name": "build-ninja-debug",
+      "configurePreset": "ninja-debug"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "test-windows-msvc-debug",
+      "configurePreset": "windows-msvc-debug",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "test-windows-msvc-release",
+      "configurePreset": "windows-msvc-release",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "test-nmake-release",
+      "configurePreset": "nmake-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "test-ninja-debug",
+      "configurePreset": "ninja-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

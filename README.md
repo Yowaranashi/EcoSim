@@ -24,6 +24,7 @@ EcoSim - модульная headless-система симуляции экос�
 ```text
 EcoSim/
   CMakeLists.txt
+  CMakePresets.json
   README.md
   configs/
     app.toml
@@ -55,11 +56,46 @@ EcoSim/
 ## Требования
 
 - CMake 3.16 или новее.
+- CMake 3.21 или новее для `CMakePresets.json`.
 - Компилятор с поддержкой C++17.
 - Windows: Visual Studio/MSVC или другой C++17 toolchain.
 - Linux/macOS: GCC/Clang с C++17.
 
 ## Сборка
+
+### Рекомендуемый вариант: CMakePresets
+
+Windows MSVC Debug:
+
+```powershell
+cmake --preset windows-msvc-debug
+cmake --build --preset build-windows-msvc-debug
+ctest --preset test-windows-msvc-debug --output-on-failure
+```
+
+Windows MSVC Release:
+
+```powershell
+cmake --preset windows-msvc-release
+cmake --build --preset build-windows-msvc-release
+ctest --preset test-windows-msvc-release --output-on-failure
+```
+
+NMake Release из Developer PowerShell или Developer Command Prompt:
+
+```powershell
+cmake --preset nmake-release
+cmake --build --preset build-nmake-release
+ctest --preset test-nmake-release --output-on-failure
+```
+
+Если установлен Ninja:
+
+```bash
+cmake --preset ninja-debug
+cmake --build --preset build-ninja-debug
+ctest --preset test-ninja-debug --output-on-failure
+```
 
 ### Универсальный вариант
 
@@ -147,6 +183,8 @@ instances = [
   { type = "recorder", id = "csv", enable = true, params = { sink = "csv" } }
 ]
 ```
+
+Конфиги читаются через централизованный TOML-парсер в `src/core/utils/toml_parser.*`. Он поддерживает используемые в MVP формы TOML: строки, числа, bool, массивы, inline tables, массивы inline tables и секции вроде `[parameters]`.
 
 Поля:
 
@@ -393,6 +431,16 @@ Viewer является отдельным исполняемым файлом �
 
 Все интеграционные тесты собраны в один executable: `ecosim_integration_tests`.
 
+Через пресеты:
+
+```powershell
+cmake --preset windows-msvc-release
+cmake --build --preset build-windows-msvc-release
+ctest --preset test-windows-msvc-release --output-on-failure
+```
+
+Старый универсальный способ:
+
 ```bash
 cmake -S . -B build
 cmake --build build
@@ -424,6 +472,10 @@ ctest --test-dir build\nmake_release --output-on-failure
 ```powershell
 .\build\nmake_release\ecosim_integration_tests.exe
 ```
+
+## CI
+
+GitHub Actions workflow находится в `.github/workflows/cmake.yml`. Он запускается на `push` и `pull_request`, конфигурирует проект через `CMakePresets`, собирает Release-конфигурацию MSVC и запускает `ctest --output-on-failure`.
 
 ## Текущие группы тестов
 

@@ -1,470 +1,200 @@
 #include "core/config.h"
 
+#include "core/utils/toml_parser.h"
 #include "models/model_dynamics_factory.h"
 
-#include <cctype>
 #include <filesystem>
-#include <fstream>
-#include <sstream>
+#include <optional>
 #include <stdexcept>
+#include <utility>
 
 namespace ecosim {
 
 namespace {
-std::string trim(const std::string &value) {
-    const char *spaces = " \t\n\r";
-    auto start = value.find_first_not_of(spaces);
-    if (start == std::string::npos) {
-        return "";
-    }
-    auto end = value.find_last_not_of(spaces);
-    return value.substr(start, end - start + 1);
+
+using utils::TomlDocument;
+using utils::TomlValue;
+
+std::string valueToString(const TomlValue &value, const std::string &fallback = "") {
+    auto text = value.asString();
+    return text ? *text : fallback;
 }
 
-std::string stripQuotes(const std::string &value) {
-    if (value.size() >= 2 && ((value.front() == '"' && value.back() == '"') ||
-                              (value.front() == '\'' && value.back() == '\''))) {
-        return value.substr(1, value.size() - 2);
-    }
-    return value;
+std::string getString(const TomlDocument &document, const std::string &key, const std::string &fallback = "") {
+    auto value = document.find(key);
+    return value ? valueToString(*value, fallback) : fallback;
 }
 
-bool isKeyChar(char c) {
-    return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-';
+std::optional<int> getInt(const TomlDocument &document, const std::string &key) {
+    auto value = document.find(key);
+    return value ? value->asInt() : std::nullopt;
 }
 
-std::vector<std::string> splitTopLevel(const std::string &input, char delimiter) {
+std::optional<double> getDouble(const TomlDocument &document, const std::string &key) {
+    auto value = document.find(key);
+    return value ? value->asDouble() : std::nullopt;
+}
+
+std::vector<std::string> stringArray(const TomlValue *value) {
     std::vector<std::string> result;
-    bool in_quotes = false;
-    char quote = '\0';
-    int brace_depth = 0;
-    int bracket_depth = 0;
-    std::size_t start = 0;
-
-    for (std::size_t i = 0; i < input.size(); ++i) {
-        char c = input[i];
-        if ((c == '"' || c == '\'') && (i == 0 || input[i - 1] != '\\')) {
-            if (!in_quotes) {
-                in_quotes = true;
-                quote = c;
-            } else if (quote == c) {
-                in_quotes = false;
-            }
-            continue;
-        }
-        if (in_quotes) {
-            continue;
-        }
-        if (c == '{') {
-            ++brace_depth;
-        } else if (c == '}') {
-            --brace_depth;
-        } else if (c == '[') {
-            ++bracket_depth;
-        } else if (c == ']') {
-            --bracket_depth;
-        } else if (c == delimiter && brace_depth == 0 && bracket_depth == 0) {
-            result.push_back(trim(input.substr(start, i - start)));
-            start = i + 1;
-        }
+    if (!value) {
+        return result;
     }
-
-    auto tail = trim(input.substr(start));
-    if (!tail.empty()) {
-        result.push_back(tail);
+    auto array = value->asArray();
+    if (!array) {
+        return result;
+    }
+    result.reserve(array->size());
+    for (const auto &entry : *array) {
+        if (auto text = entry.asString()) {
+            result.push_back(*text);
+        }
     }
     return result;
 }
 
-std::size_t findTopLevelEquals(const std::string &input) {
-    bool in_quotes = false;
-    char quote = '\0';
-    int brace_depth = 0;
-    int bracket_depth = 0;
-    for (std::size_t i = 0; i < input.size(); ++i) {
-        char c = input[i];
-        if ((c == '"' || c == '\'') && (i == 0 || input[i - 1] != '\\')) {
-            if (!in_quotes) {
-                in_quotes = true;
-                quote = c;
-            } else if (quote == c) {
-                in_quotes = false;
-            }
-            continue;
-        }
-        if (in_quotes) {
-            continue;
-        }
-        if (c == '{') {
-            ++brace_depth;
-        } else if (c == '}') {
-            --brace_depth;
-        } else if (c == '[') {
-            ++bracket_depth;
-        } else if (c == ']') {
-            --bracket_depth;
-        } else if (c == '=' && brace_depth == 0 && bracket_depth == 0) {
-            return i;
+std::vector<double> numberArray(const TomlValue *value) {
+    std::vector<double> result;
+    if (!value) {
+        return result;
+    }
+    auto array = value->asArray();
+    if (!array) {
+        return result;
+    }
+    result.reserve(array->size());
+    for (const auto &entry : *array) {
+        if (auto number = entry.asDouble()) {
+            result.push_back(*number);
         }
     }
-    return std::string::npos;
+    return result;
 }
 
-std::string loadFile(const std::string &path) {
-    std::ifstream file(path);
-    if (!file) {
-        throw std::runtime_error("Unable to open file: " + path);
-    }
-    std::ostringstream buffer;
-    buffer << file.rdbuf();
-    return buffer.str();
-}
-
-std::string stripLineComment(const std::string &line) {
-    bool in_quotes = false;
-    char quote = '\0';
-
-    for (std::size_t i = 0; i < line.size(); ++i) {
-        const char c = line[i];
-        if ((c == '"' || c == '\'') && (i == 0 || line[i - 1] != '\\')) {
-            if (!in_quotes) {
-                in_quotes = true;
-                quote = c;
-            } else if (quote == c) {
-                in_quotes = false;
-            }
-            continue;
-        }
-        if (!in_quotes && c == '#') {
-            return line.substr(0, i);
-        }
-    }
-
-    return line;
-}
-
-std::string removeComments(const std::string &input) {
-    std::ostringstream out;
-    std::istringstream stream(input);
-    std::string line;
-    while (std::getline(stream, line)) {
-        out << stripLineComment(line) << '\n';
-    }
-    return out.str();
-}
-
-std::optional<double> parseDouble(const std::string &value) {
-    try {
-        return std::stod(value);
-    } catch (const std::invalid_argument &) {
-    } catch (const std::out_of_range &) {
-    }
-    return std::nullopt;
-}
-
-std::map<std::string, std::string> parseInlineMap(const std::string &input) {
+std::map<std::string, std::string> stringMap(const TomlValue::Table *table) {
     std::map<std::string, std::string> result;
-    std::string content = trim(input);
-    if (!content.empty() && content.front() == '{') {
-        content.erase(content.begin());
+    if (!table) {
+        return result;
     }
-    if (!content.empty() && content.back() == '}') {
-        content.pop_back();
-    }
-
-    for (const auto &entry : splitTopLevel(content, ',')) {
-        auto eq = findTopLevelEquals(entry);
-        if (eq == std::string::npos) {
-            continue;
+    for (const auto &entry : *table) {
+        if (auto text = entry.second.asString()) {
+            result[entry.first] = *text;
         }
-        auto key = trim(entry.substr(0, eq));
-        auto value = trim(entry.substr(eq + 1));
-        result[key] = stripQuotes(value);
     }
     return result;
 }
 
-std::map<std::string, double> parseNumberMap(const std::string &input) {
+std::map<std::string, double> numberMap(const TomlValue::Table *table) {
     std::map<std::string, double> result;
-    for (const auto &pair : parseInlineMap(input)) {
-        result[pair.first] = std::stod(pair.second);
+    if (!table) {
+        return result;
+    }
+    for (const auto &entry : *table) {
+        if (auto number = entry.second.asDouble()) {
+            result[entry.first] = *number;
+        }
     }
     return result;
 }
 
-std::map<std::string, double> parseNumberTable(const std::string &input, const std::string &table_name) {
-    std::map<std::string, double> result;
-    std::istringstream stream(input);
-    std::string line;
-    bool active = false;
-    const std::string header = "[" + table_name + "]";
+std::map<std::string, double> numberMap(const TomlValue *value) {
+    return value ? numberMap(value->asTable()) : std::map<std::string, double>{};
+}
 
-    while (std::getline(stream, line)) {
-        auto trimmed = trim(line);
-        if (trimmed.empty()) {
+std::vector<std::vector<double>> numberMatrix(const TomlValue *value) {
+    std::vector<std::vector<double>> result;
+    if (!value) {
+        return result;
+    }
+    auto rows = value->asArray();
+    if (!rows) {
+        return result;
+    }
+    result.reserve(rows->size());
+    for (const auto &row_value : *rows) {
+        auto row_items = row_value.asArray();
+        if (!row_items) {
             continue;
         }
-        if (trimmed.front() == '[' && trimmed.back() == ']' && findTopLevelEquals(trimmed) == std::string::npos) {
-            if (trimmed == header) {
-                active = true;
-                continue;
+        std::vector<double> row;
+        row.reserve(row_items->size());
+        for (const auto &cell : *row_items) {
+            if (auto number = cell.asDouble()) {
+                row.push_back(*number);
             }
-            if (active) {
-                break;
-            }
         }
-        if (!active) {
-            continue;
-        }
-
-        auto eq = findTopLevelEquals(trimmed);
-        if (eq == std::string::npos) {
-            continue;
-        }
-        auto key = trim(trimmed.substr(0, eq));
-        auto value = trim(trimmed.substr(eq + 1));
-        auto scalar = stripQuotes(value);
-        if (scalar.empty() || scalar.front() == '[' || scalar.front() == '{' || scalar.front() == '"') {
-            continue;
-        }
-        if (auto parsed = parseDouble(scalar)) {
-            result[key] = *parsed;
+        if (!row.empty()) {
+            result.push_back(std::move(row));
         }
     }
-
     return result;
+}
+
+void mergeNumberMap(std::map<std::string, double> &target, const std::map<std::string, double> &values) {
+    for (const auto &entry : values) {
+        target[entry.first] = entry.second;
+    }
 }
 
 void mergeQualifiedNumberMap(std::map<std::string, double> &target,
                              const std::string &prefix,
                              const std::map<std::string, double> &values) {
-    for (const auto &pair : values) {
-        target[prefix + "." + pair.first] = pair.second;
+    for (const auto &entry : values) {
+        target[prefix + "." + entry.first] = entry.second;
     }
-}
-
-std::vector<std::string> parseArrayStrings(const std::string &input) {
-    std::vector<std::string> result;
-    std::string content = trim(input);
-    if (!content.empty() && content.front() == '[') {
-        content.erase(content.begin());
-    }
-    if (!content.empty() && content.back() == ']') {
-        content.pop_back();
-    }
-    for (const auto &entry : splitTopLevel(content, ',')) {
-        auto value = trim(entry);
-        if (value.empty()) {
-            continue;
-        }
-        result.push_back(stripQuotes(value));
-    }
-    return result;
-}
-
-std::vector<double> parseArrayNumbers(const std::string &input) {
-    std::vector<double> result;
-    std::string content = trim(input);
-    if (!content.empty() && content.front() == '[') {
-        content.erase(content.begin());
-    }
-    if (!content.empty() && content.back() == ']') {
-        content.pop_back();
-    }
-    for (const auto &entry : splitTopLevel(content, ',')) {
-        auto value = trim(entry);
-        if (!value.empty()) {
-            result.push_back(std::stod(value));
-        }
-    }
-    return result;
-}
-
-std::vector<std::vector<double>> parseMatrix(const std::string &input) {
-    std::vector<std::vector<double>> result;
-    std::string content = trim(input);
-    if (!content.empty() && content.front() == '[') {
-        content.erase(content.begin());
-    }
-    if (!content.empty() && content.back() == ']') {
-        content.pop_back();
-    }
-    for (const auto &entry : splitTopLevel(content, ',')) {
-        auto row = trim(entry);
-        if (!row.empty()) {
-            result.push_back(parseArrayNumbers(row));
-        }
-    }
-    return result;
-}
-
-std::vector<std::map<std::string, std::string>> parseArrayOfTables(const std::string &input) {
-    std::vector<std::map<std::string, std::string>> result;
-    std::string content = trim(input);
-    if (!content.empty() && content.front() == '[') {
-        content.erase(content.begin());
-    }
-    if (!content.empty() && content.back() == ']') {
-        content.pop_back();
-    }
-    for (std::size_t pos = 0; pos < content.size();) {
-        auto open = content.find('{', pos);
-        if (open == std::string::npos) {
-            break;
-        }
-        bool in_quotes = false;
-        char quote = '\0';
-        int depth = 0;
-        std::size_t close = std::string::npos;
-        for (std::size_t i = open; i < content.size(); ++i) {
-            char c = content[i];
-            if ((c == '"' || c == '\'') && (i == 0 || content[i - 1] != '\\')) {
-                if (!in_quotes) {
-                    in_quotes = true;
-                    quote = c;
-                } else if (quote == c) {
-                    in_quotes = false;
-                }
-                continue;
-            }
-            if (in_quotes) {
-                continue;
-            }
-            if (c == '{') {
-                ++depth;
-            } else if (c == '}') {
-                --depth;
-                if (depth == 0) {
-                    close = i;
-                    break;
-                }
-            }
-        }
-        if (close == std::string::npos) {
-            break;
-        }
-        auto table = content.substr(open, close - open + 1);
-        result.push_back(parseInlineMap(table));
-        pos = close + 1;
-    }
-    return result;
-}
-
-std::optional<std::string> findRawValue(const std::string &input, const std::string &key) {
-    bool in_quotes = false;
-    char quote = '\0';
-    int brace_depth = 0;
-    int bracket_depth = 0;
-
-    for (std::size_t pos = 0; pos < input.size(); ++pos) {
-        char c = input[pos];
-        if ((c == '"' || c == '\'') && (pos == 0 || input[pos - 1] != '\\')) {
-            if (!in_quotes) {
-                in_quotes = true;
-                quote = c;
-            } else if (quote == c) {
-                in_quotes = false;
-            }
-            continue;
-        }
-        if (in_quotes) {
-            continue;
-        }
-        if (c == '{') {
-            ++brace_depth;
-            continue;
-        }
-        if (c == '}') {
-            --brace_depth;
-            continue;
-        }
-        if (c == '[') {
-            ++bracket_depth;
-            continue;
-        }
-        if (c == ']') {
-            --bracket_depth;
-            continue;
-        }
-        if (brace_depth != 0 || bracket_depth != 0 || input.compare(pos, key.size(), key) != 0) {
-            continue;
-        }
-
-        bool left_ok = pos == 0 || !isKeyChar(input[pos - 1]);
-        std::size_t after_key = pos + key.size();
-        bool right_ok = after_key >= input.size() || !isKeyChar(input[after_key]);
-        if (left_ok && right_ok) {
-            std::size_t cursor = after_key;
-            while (cursor < input.size() && (input[cursor] == ' ' || input[cursor] == '\t')) {
-                ++cursor;
-            }
-            if (cursor < input.size() && input[cursor] == '=') {
-                auto eq = cursor;
-                auto start = eq + 1;
-                while (start < input.size() && (input[start] == ' ' || input[start] == '\t')) {
-                    ++start;
-                }
-                if (start >= input.size()) {
-                    return std::nullopt;
-                }
-                char opener = input[start];
-                if (opener == '[' || opener == '{') {
-                    char closer = (opener == '[') ? ']' : '}';
-                    int depth = 0;
-                    bool in_quotes = false;
-                    char quote = '\0';
-                    std::size_t end = start;
-                    for (; end < input.size(); ++end) {
-                        char c = input[end];
-                        if ((c == '"' || c == '\'') && (end == 0 || input[end - 1] != '\\')) {
-                            if (!in_quotes) {
-                                in_quotes = true;
-                                quote = c;
-                            } else if (quote == c) {
-                                in_quotes = false;
-                            }
-                            continue;
-                        }
-                        if (in_quotes) {
-                            continue;
-                        }
-                        if (input[end] == opener) {
-                            depth++;
-                        } else if (input[end] == closer) {
-                            depth--;
-                            if (depth == 0) {
-                                ++end;
-                                break;
-                            }
-                        }
-                    }
-                    return trim(input.substr(start, end - start));
-                }
-                auto end = input.find('\n', start);
-                if (end == std::string::npos) {
-                    end = input.size();
-                }
-                return trim(input.substr(start, end - start));
-            }
-        }
-    }
-    return std::nullopt;
 }
 
 bool isSupportedIntegrator(const std::string &integrator) {
     return integrator == "euler" || integrator == "rk4";
 }
 
-bool startsWithArray(const std::string &value) {
-    auto trimmed = trim(value);
-    return !trimmed.empty() && trimmed.front() == '[';
+void applyRootOrTableNumberMap(ScenarioConfig &scenario,
+                               const TomlDocument &document,
+                               const std::string &name) {
+    mergeNumberMap(scenario.model.parameters, numberMap(document.find(name)));
+    mergeNumberMap(scenario.model.parameters, numberMap(document.findTable(name)));
 }
 
-bool startsWithInlineMap(const std::string &value) {
-    auto trimmed = trim(value);
-    return !trimmed.empty() && trimmed.front() == '{';
+void applyMaybeQualifiedMap(std::map<std::string, double> &parameters,
+                            std::vector<double> &positional,
+                            const TomlValue *value,
+                            const std::string &prefix) {
+    if (!value) {
+        return;
+    }
+    if (value->isArray()) {
+        positional = numberArray(value);
+    } else {
+        mergeQualifiedNumberMap(parameters, prefix, numberMap(value));
+    }
 }
+
+SpeciesConfig parseSpeciesTable(const TomlValue::Table &table, ModelConfig &model) {
+    SpeciesConfig species;
+    if (auto id = table.find("id"); id != table.end()) {
+        species.id = valueToString(id->second);
+    } else if (auto id = table.find("species"); id != table.end()) {
+        species.id = valueToString(id->second);
+    }
+
+    const auto initial_it = table.find("initial_state") != table.end() ? table.find("initial_state")
+                                                                       : table.find("initial");
+    if (initial_it != table.end()) {
+        if (auto initial = initial_it->second.asDouble()) {
+            species.initial_state = *initial;
+            if (!species.id.empty()) {
+                model.initial_state[species.id] = *initial;
+            }
+        }
+    }
+
+    if (auto params = table.find("parameters"); params != table.end()) {
+        species.parameters = numberMap(params->second.asTable());
+    }
+    return species;
 }
+
+} // namespace
 
 Criticality parseCriticality(const std::string &value) {
     if (value == "Critical") {
@@ -477,53 +207,50 @@ Criticality parseCriticality(const std::string &value) {
 }
 
 AppConfig ConfigLoader::loadAppConfig(const std::string &path) {
-    auto content = removeComments(loadFile(path));
+    const auto document = TomlDocument::parseFile(path);
     AppConfig config;
 
-    if (auto value = findRawValue(content, "mode")) {
-        config.mode = stripQuotes(*value);
-    }
-    if (auto value = findRawValue(content, "error_policy")) {
-        auto policy = stripQuotes(*value);
+    config.mode = getString(document, "mode", config.mode);
+    const auto policy = getString(document, "error_policy");
+    if (!policy.empty()) {
         config.error_policy = (policy == "auto-disable") ? ErrorPolicy::AutoDisable : ErrorPolicy::FailFast;
     }
-    if (auto value = findRawValue(content, "modules_dir")) {
-        config.modules_dir = stripQuotes(*value);
+    config.modules_dir = getString(document, "modules_dir", config.modules_dir);
+    config.scenario_path = getString(document, "scenario_path", config.scenario_path);
+    config.output_dir = getString(document, "output_dir", config.output_dir);
+    if (auto dt = getDouble(document, "dt")) {
+        config.dt = *dt;
     }
-    if (auto value = findRawValue(content, "scenario_path")) {
-        config.scenario_path = stripQuotes(*value);
+    if (auto max_ticks = getInt(document, "max_ticks")) {
+        config.max_ticks = *max_ticks;
     }
-    if (auto value = findRawValue(content, "output_dir")) {
-        config.output_dir = stripQuotes(*value);
-    }
-    if (auto value = findRawValue(content, "dt")) {
-        config.dt = std::stod(*value);
-    }
-    if (auto value = findRawValue(content, "max_ticks")) {
-        config.max_ticks = std::stoi(*value);
-    }
-    if (auto value = findRawValue(content, "instances")) {
-        auto tables = parseArrayOfTables(*value);
-        for (const auto &table : tables) {
-            ModuleInstanceConfig instance;
-            auto type_it = table.find("type");
-            if (type_it != table.end()) {
-                instance.type_id = type_it->second;
-            }
-            auto id_it = table.find("id");
-            if (id_it != table.end()) {
-                instance.instance_id = id_it->second;
-            }
-            auto enable_it = table.find("enable");
-            if (enable_it != table.end()) {
-                instance.enabled = (enable_it->second == "true");
-            }
-            auto params_it = table.find("params");
-            if (params_it != table.end()) {
-                instance.params = parseInlineMap(params_it->second);
-            }
-            if (!instance.type_id.empty()) {
-                config.instances.push_back(instance);
+
+    if (auto instances = document.find("instances")) {
+        if (auto array = instances->asArray()) {
+            for (const auto &entry : *array) {
+                auto table = entry.asTable();
+                if (!table) {
+                    continue;
+                }
+
+                ModuleInstanceConfig instance;
+                if (auto type = table->find("type"); type != table->end()) {
+                    instance.type_id = valueToString(type->second);
+                }
+                if (auto id = table->find("id"); id != table->end()) {
+                    instance.instance_id = valueToString(id->second);
+                }
+                if (auto enabled = table->find("enable"); enabled != table->end()) {
+                    if (auto parsed = enabled->second.asBool()) {
+                        instance.enabled = *parsed;
+                    }
+                }
+                if (auto params = table->find("params"); params != table->end()) {
+                    instance.params = stringMap(params->second.asTable());
+                }
+                if (!instance.type_id.empty()) {
+                    config.instances.push_back(std::move(instance));
+                }
             }
         }
     }
@@ -532,158 +259,93 @@ AppConfig ConfigLoader::loadAppConfig(const std::string &path) {
 }
 
 ModuleManifest ConfigLoader::loadManifest(const std::string &path) {
-    auto content = removeComments(loadFile(path));
+    const auto document = TomlDocument::parseFile(path);
     ModuleManifest manifest;
-    if (auto value = findRawValue(content, "id")) {
-        manifest.type_id = stripQuotes(*value);
-    }
-    if (auto value = findRawValue(content, "version")) {
-        manifest.version = stripQuotes(*value);
-    }
-    if (auto value = findRawValue(content, "dependencies")) {
-        manifest.dependencies = parseArrayStrings(*value);
-    }
-    if (auto value = findRawValue(content, "criticality")) {
-        manifest.criticality = parseCriticality(stripQuotes(*value));
-    }
-    if (auto value = findRawValue(content, "library")) {
-        manifest.library_path = stripQuotes(*value);
+    manifest.type_id = getString(document, "id");
+    manifest.version = getString(document, "version");
+    manifest.dependencies = stringArray(document.find("dependencies"));
+    manifest.library_path = getString(document, "library");
+    if (auto criticality = document.find("criticality")) {
+        manifest.criticality = parseCriticality(valueToString(*criticality));
     }
     return manifest;
 }
 
 ScenarioConfig ConfigLoader::loadScenario(const std::string &path) {
-    auto content = removeComments(loadFile(path));
+    const auto document = TomlDocument::parseFile(path);
     ScenarioConfig scenario;
-    if (auto value = findRawValue(content, "scenario_id")) {
-        scenario.scenario_id = stripQuotes(*value);
-    }
+
+    scenario.scenario_id = getString(document, "scenario_id");
     if (scenario.scenario_id.empty()) {
         scenario.scenario_id = std::filesystem::path(path).stem().string();
     }
-    std::optional<std::string> model_id;
-    if (auto value = findRawValue(content, "model")) {
-        model_id = stripQuotes(*value);
-    } else if (auto value = findRawValue(content, "model_id")) {
-        model_id = stripQuotes(*value);
+
+    auto model_id = getString(document, "model");
+    if (model_id.empty()) {
+        model_id = getString(document, "model_id");
     }
-    if (model_id) {
-        if (!isSupportedModelId(*model_id)) {
-            throw std::runtime_error("Unsupported scenario model: " + *model_id);
+    if (!model_id.empty()) {
+        if (!isSupportedModelId(model_id)) {
+            throw std::runtime_error("Unsupported scenario model: " + model_id);
         }
-        scenario.model.model_id = *model_id;
+        scenario.model.model_id = model_id;
     }
-    if (auto value = findRawValue(content, "seed")) {
-        scenario.seed = std::stoi(*value);
+    if (auto seed = getInt(document, "seed")) {
+        scenario.seed = *seed;
     }
-    if (auto value = findRawValue(content, "dt")) {
-        scenario.integrator.dt = std::stod(*value);
+    if (auto dt = getDouble(document, "dt")) {
+        scenario.integrator.dt = *dt;
     }
-    if (auto value = findRawValue(content, "stop_at_tick")) {
-        scenario.stop_at_tick = std::stoi(*value);
+    if (auto stop_at_tick = getInt(document, "stop_at_tick")) {
+        scenario.stop_at_tick = *stop_at_tick;
     }
-    if (auto value = findRawValue(content, "integrator")) {
-        auto integrator = stripQuotes(*value);
+    auto integrator = getString(document, "integrator");
+    if (!integrator.empty()) {
         if (!isSupportedIntegrator(integrator)) {
             throw std::runtime_error("Unsupported scenario integrator: " + integrator);
         }
         scenario.integrator.type = integrator;
     }
-    if (auto value = findRawValue(content, "requires")) {
-        scenario.requires = parseArrayStrings(*value);
-    }
+    scenario.requires = stringArray(document.find("requires"));
 
     std::vector<double> positional_initial_state;
     std::vector<double> positional_growth;
     std::vector<double> positional_sensitivity;
 
-    if (auto value = findRawValue(content, "initial_state")) {
-        if (startsWithArray(*value)) {
-            positional_initial_state = parseArrayNumbers(*value);
+    if (auto initial_state = document.find("initial_state")) {
+        if (initial_state->isArray()) {
+            positional_initial_state = numberArray(initial_state);
         } else {
-            scenario.model.initial_state = parseNumberMap(*value);
+            scenario.model.initial_state = numberMap(initial_state);
         }
     }
-    if (auto value = findRawValue(content, "parameters")) {
-        if (startsWithInlineMap(*value)) {
-            scenario.model.parameters = parseNumberMap(*value);
-        }
-    }
-    if (auto value = findRawValue(content, "params")) {
-        if (startsWithInlineMap(*value)) {
-            for (const auto &param : parseNumberMap(*value)) {
-                scenario.model.parameters[param.first] = param.second;
-            }
-        }
-    }
-    for (const auto &param : parseNumberTable(content, "parameters")) {
-        scenario.model.parameters[param.first] = param.second;
-    }
-    for (const auto &param : parseNumberTable(content, "params")) {
-        scenario.model.parameters[param.first] = param.second;
-    }
-    if (auto value = findRawValue(content, "growth")) {
-        if (startsWithArray(*value)) {
-            positional_growth = parseArrayNumbers(*value);
-        } else {
-            mergeQualifiedNumberMap(scenario.model.parameters, "growth", parseNumberMap(*value));
-        }
-    }
-    if (auto value = findRawValue(content, "growth_rates")) {
-        if (startsWithArray(*value)) {
-            positional_growth = parseArrayNumbers(*value);
-        } else {
-            mergeQualifiedNumberMap(scenario.model.parameters, "growth", parseNumberMap(*value));
-        }
-    }
-    if (auto value = findRawValue(content, "sensitivity")) {
-        if (startsWithArray(*value)) {
-            positional_sensitivity = parseArrayNumbers(*value);
-        } else {
-            mergeQualifiedNumberMap(scenario.model.parameters, "sensitivity", parseNumberMap(*value));
-        }
-    }
-    if (auto value = findRawValue(content, "interaction_matrix")) {
-        scenario.model.interaction_matrix = parseMatrix(*value);
-    }
-    if (auto value = findRawValue(content, "species")) {
-        if (value->find('{') == std::string::npos) {
-            for (const auto &name : parseArrayStrings(*value)) {
-                SpeciesConfig species;
-                species.id = name;
-                scenario.model.species.push_back(species);
-            }
-        } else {
-            auto tables = parseArrayOfTables(*value);
-            for (const auto &table : tables) {
-                SpeciesConfig species;
-                auto id_it = table.find("id");
-                if (id_it == table.end()) {
-                    id_it = table.find("species");
-                }
-                if (id_it != table.end()) {
-                    species.id = id_it->second;
-                }
-                auto initial_it = table.find("initial_state");
-                if (initial_it == table.end()) {
-                    initial_it = table.find("initial");
-                }
-                if (initial_it != table.end()) {
-                    species.initial_state = std::stod(initial_it->second);
+    applyRootOrTableNumberMap(scenario, document, "parameters");
+    applyRootOrTableNumberMap(scenario, document, "params");
+
+    applyMaybeQualifiedMap(scenario.model.parameters, positional_growth, document.find("growth"), "growth");
+    applyMaybeQualifiedMap(scenario.model.parameters, positional_growth, document.find("growth_rates"), "growth");
+    applyMaybeQualifiedMap(scenario.model.parameters, positional_sensitivity, document.find("sensitivity"),
+                           "sensitivity");
+
+    scenario.model.interaction_matrix = numberMatrix(document.find("interaction_matrix"));
+
+    if (auto species_value = document.find("species")) {
+        if (auto species_array = species_value->asArray()) {
+            for (const auto &entry : *species_array) {
+                if (auto text = entry.asString()) {
+                    SpeciesConfig species;
+                    species.id = *text;
+                    scenario.model.species.push_back(std::move(species));
+                } else if (auto table = entry.asTable()) {
+                    auto species = parseSpeciesTable(*table, scenario.model);
                     if (!species.id.empty()) {
-                        scenario.model.initial_state[species.id] = species.initial_state;
+                        scenario.model.species.push_back(std::move(species));
                     }
                 }
-                auto params_it = table.find("parameters");
-                if (params_it != table.end()) {
-                    species.parameters = parseNumberMap(params_it->second);
-                }
-                if (!species.id.empty()) {
-                    scenario.model.species.push_back(species);
-                }
             }
         }
     }
+
     for (std::size_t i = 0; i < scenario.model.species.size(); ++i) {
         auto &species = scenario.model.species[i];
         if (i < positional_initial_state.size()) {
@@ -697,27 +359,35 @@ ScenarioConfig ConfigLoader::loadScenario(const std::string &path) {
             scenario.model.parameters["sensitivity." + species.id] = positional_sensitivity[i];
         }
     }
-    if (auto value = findRawValue(content, "schedule")) {
-        auto tables = parseArrayOfTables(*value);
-        for (const auto &table : tables) {
-            ScheduledAction action;
-            auto tick_it = table.find("tick");
-            if (tick_it != table.end()) {
-                action.tick = std::stoi(tick_it->second);
-            }
-            auto cmd_it = table.find("command");
-            if (cmd_it != table.end()) {
-                action.command = cmd_it->second;
-            }
-            for (const auto &pair : table) {
-                if (pair.first == "tick" || pair.first == "command") {
+
+    if (auto schedule = document.find("schedule")) {
+        if (auto schedule_array = schedule->asArray()) {
+            for (const auto &entry : *schedule_array) {
+                auto table = entry.asTable();
+                if (!table) {
                     continue;
                 }
-                action.params[pair.first] = pair.second;
+
+                ScheduledAction action;
+                if (auto tick = table->find("tick"); tick != table->end()) {
+                    if (auto parsed_tick = tick->second.asInt()) {
+                        action.tick = *parsed_tick;
+                    }
+                }
+                if (auto command = table->find("command"); command != table->end()) {
+                    action.command = valueToString(command->second);
+                }
+                for (const auto &param : *table) {
+                    if (param.first == "tick" || param.first == "command") {
+                        continue;
+                    }
+                    action.params[param.first] = valueToString(param.second);
+                }
+                scenario.schedule.push_back(std::move(action));
             }
-            scenario.schedule.push_back(action);
         }
     }
+
     return scenario;
 }
 

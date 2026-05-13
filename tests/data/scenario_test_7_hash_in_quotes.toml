@@ -1,0 +1,9 @@
+
+scenario_id = "hash#inside"
+model = "glv"
+species = [
+  { id = "prey#1", initial_state = 10.0 }
+]
+schedule = [
+  { tick = 1, command = "set_param", name = "growth.prey#1", value = 0.5 } # trailing comment
+]

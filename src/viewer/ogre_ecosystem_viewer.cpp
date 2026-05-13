@@ -1,5 +1,7 @@
 #include "viewer/ogre_ecosystem_viewer.h"
 
+#include "core/utils/string_utils.h"
+
 #include <Ogre.h>
 #include <OgreWindowEventUtilities.h>
 
@@ -25,10 +27,6 @@ std::string lowerCopy(std::string value) {
         return static_cast<char>(std::tolower(ch));
     });
     return value;
-}
-
-bool startsWith(const std::string &value, const std::string &prefix) {
-    return value.size() >= prefix.size() && value.compare(0, prefix.size(), prefix) == 0;
 }
 
 bool isRmModel(const SimulationFrame &frame) {
@@ -489,7 +487,7 @@ struct OgreEcosystemViewer::Impl {
 
     void updateShockEffects(const SimulationFrame &frame) {
         for (const auto &flag : frame.flags) {
-            if (!startsWith(flag, "shock.")) {
+            if (!utils::startsWith(flag, "shock.")) {
                 continue;
             }
 

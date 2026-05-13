@@ -1,8 +1,9 @@
 #include "viewer/csv_result_reader.h"
 
+#include "core/utils/parse_utils.h"
+#include "core/utils/string_utils.h"
+
 #include <algorithm>
-#include <cctype>
-#include <cstdlib>
 #include <fstream>
 #include <string>
 #include <utility>
@@ -10,36 +11,12 @@
 namespace ecosim::viewer {
 
 namespace {
-bool startsWith(const std::string &value, const std::string &prefix) {
-    return value.size() >= prefix.size() && value.compare(0, prefix.size(), prefix) == 0;
-}
-
-std::string trim(const std::string &value) {
-    auto first = value.begin();
-    while (first != value.end() && std::isspace(static_cast<unsigned char>(*first))) {
-        ++first;
-    }
-
-    auto last = value.end();
-    while (last != first && std::isspace(static_cast<unsigned char>(*(last - 1)))) {
-        --last;
-    }
-
-    return std::string(first, last);
-}
-
 double parseDoubleOr(const std::string &value, double fallback) {
-    const auto cleaned = trim(value);
+    const auto cleaned = utils::trim(value);
     if (cleaned.empty()) {
         return fallback;
     }
-
-    char *end = nullptr;
-    const double parsed = std::strtod(cleaned.c_str(), &end);
-    if (end == cleaned.c_str()) {
-        return fallback;
-    }
-    return parsed;
+    return utils::parseDoubleOr(cleaned, fallback);
 }
 
 std::vector<std::string> splitFlags(const std::string &value) {
@@ -47,7 +24,7 @@ std::vector<std::string> splitFlags(const std::string &value) {
     std::string current;
     for (char ch : value) {
         if (ch == '|') {
-            auto cleaned = trim(current);
+            auto cleaned = utils::trim(current);
             if (!cleaned.empty()) {
                 flags.push_back(cleaned);
             }
@@ -57,7 +34,7 @@ std::vector<std::string> splitFlags(const std::string &value) {
         }
     }
 
-    auto cleaned = trim(current);
+    auto cleaned = utils::trim(current);
     if (!cleaned.empty()) {
         flags.push_back(cleaned);
     }
@@ -129,7 +106,7 @@ std::vector<std::pair<std::size_t, std::string>> collectPrefixedColumns(const st
                                                                         const std::string &prefix) {
     std::vector<std::pair<std::size_t, std::string>> columns;
     for (std::size_t i = 0; i < header.size(); ++i) {
-        if (startsWith(header[i], prefix) && header[i].size() > prefix.size()) {
+        if (utils::startsWith(header[i], prefix) && header[i].size() > prefix.size()) {
             columns.emplace_back(i, header[i].substr(prefix.size()));
         }
     }
@@ -166,7 +143,7 @@ std::vector<SimulationFrame> CsvResultReader::read(const std::string &path) cons
 
     for (std::size_t row_index = 1; row_index < records.size(); ++row_index) {
         const auto &row = records[row_index];
-        if (row.empty() || (row.size() == 1 && trim(row.front()).empty())) {
+        if (row.empty() || (row.size() == 1 && utils::trim(row.front()).empty())) {
             continue;
         }
 
@@ -189,7 +166,7 @@ std::vector<SimulationFrame> CsvResultReader::read(const std::string &path) cons
 
         for (const auto &column : metric_columns) {
             const auto value = valueAt(row, column.first);
-            if (!trim(value).empty()) {
+            if (!utils::trim(value).empty()) {
                 frame.metrics[column.second] = parseDoubleOr(value, 0.0);
             }
         }

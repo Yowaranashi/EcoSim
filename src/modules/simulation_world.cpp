@@ -1,12 +1,14 @@
 #include "modules/simulation_world.h"
 
 #include "core/logger.h"
+#include "core/utils/hash.h"
+#include "core/utils/parse_utils.h"
+#include "core/utils/string_utils.h"
 #include "models/model_dynamics_factory.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cmath>
-#include <cstdint>
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
@@ -14,20 +16,6 @@
 namespace ecosim {
 
 namespace {
-std::string trim(const std::string &value) {
-    const char *spaces = " \t\n\r";
-    auto start = value.find_first_not_of(spaces);
-    if (start == std::string::npos) {
-        return "";
-    }
-    auto end = value.find_last_not_of(spaces);
-    return value.substr(start, end - start + 1);
-}
-
-bool startsWith(const std::string &value, const std::string &prefix) {
-    return value.size() >= prefix.size() && value.compare(0, prefix.size(), prefix) == 0;
-}
-
 std::string getStringParam(const WorldCommand &command, const std::string &name, const std::string &fallback = "") {
     auto it = command.params.find(name);
     return it != command.params.end() ? it->second : fallback;
@@ -50,52 +38,28 @@ double getNumberParam(const WorldCommand &command, const std::string &name, doub
     return fallback;
 }
 
-std::vector<std::string> splitList(const std::string &value, char delimiter = ',') {
-    std::vector<std::string> result;
-    std::istringstream stream(value);
-    std::string item;
-    while (std::getline(stream, item, delimiter)) {
-        auto cleaned = trim(item);
-        if (!cleaned.empty()) {
-            result.push_back(cleaned);
-        }
-    }
-    return result;
-}
-
-std::string joinList(const std::vector<std::string> &values) {
-    std::ostringstream out;
-    for (std::size_t i = 0; i < values.size(); ++i) {
-        if (i != 0) {
-            out << ',';
-        }
-        out << values[i];
-    }
-    return out.str();
-}
-
 std::string stripBrackets(std::string value) {
-    value = trim(value);
+    value = utils::trim(value);
     while (!value.empty() && (value.front() == '[' || value.front() == '{')) {
         value.erase(value.begin());
-        value = trim(value);
+        value = utils::trim(value);
     }
     while (!value.empty() && (value.back() == ']' || value.back() == '}')) {
         value.pop_back();
-        value = trim(value);
+        value = utils::trim(value);
     }
     return value;
 }
 
 std::map<std::string, double> parseNumberMap(const std::string &value) {
     std::map<std::string, double> result;
-    for (const auto &entry : splitList(stripBrackets(value))) {
+    for (const auto &entry : utils::splitTrimmed(stripBrackets(value))) {
         const auto equals = entry.find('=');
         if (equals == std::string::npos) {
             continue;
         }
-        const auto key = trim(entry.substr(0, equals));
-        const auto number = trim(entry.substr(equals + 1));
+        const auto key = utils::trim(entry.substr(0, equals));
+        const auto number = utils::trim(entry.substr(equals + 1));
         if (!key.empty() && !number.empty()) {
             result[key] = std::stod(number);
         }
@@ -105,9 +69,9 @@ std::map<std::string, double> parseNumberMap(const std::string &value) {
 
 std::vector<std::vector<double>> parseMatrix(const std::string &value) {
     std::vector<std::vector<double>> matrix;
-    for (const auto &row_text : splitList(stripBrackets(value), ';')) {
+    for (const auto &row_text : utils::splitTrimmed(stripBrackets(value), ';')) {
         std::vector<double> row;
-        for (const auto &cell : splitList(stripBrackets(row_text))) {
+        for (const auto &cell : utils::splitTrimmed(stripBrackets(row_text))) {
             row.push_back(std::stod(cell));
         }
         if (!row.empty()) {
@@ -122,13 +86,8 @@ WorldCommand makeCommand(const std::string &command, const std::map<std::string,
     result.command = command;
     result.params = params;
     for (const auto &pair : params) {
-        try {
-            std::size_t parsed = 0;
-            double value = std::stod(pair.second, &parsed);
-            if (parsed == pair.second.size()) {
-                result.numeric_params[pair.first] = value;
-            }
-        } catch (...) {
+        if (auto value = utils::parseDouble(pair.second)) {
+            result.numeric_params[pair.first] = *value;
         }
     }
     return result;
@@ -220,7 +179,7 @@ ModelConfig buildModelConfig(const WorldCommand &command, const std::string &mod
     config.model_id = canonicalModelId(model_id);
 
     auto species_text = getStringParam(command, "species", getStringParam(command, "species_names"));
-    for (const auto &name : splitList(species_text)) {
+    for (const auto &name : utils::splitTrimmed(species_text)) {
         ensureSpecies(config, name);
     }
 
@@ -239,13 +198,13 @@ ModelConfig buildModelConfig(const WorldCommand &command, const std::string &mod
     }
 
     for (const auto &entry : command.numeric_params) {
-        if (startsWith(entry.first, "initial.")) {
+        if (utils::startsWith(entry.first, "initial.")) {
             applyInitialState(config, entry.first.substr(8), entry.second);
-        } else if (startsWith(entry.first, "initial_state.")) {
+        } else if (utils::startsWith(entry.first, "initial_state.")) {
             applyInitialState(config, entry.first.substr(14), entry.second);
-        } else if (startsWith(entry.first, "param.")) {
+        } else if (utils::startsWith(entry.first, "param.")) {
             config.parameters[entry.first.substr(6)] = entry.second;
-        } else if (startsWith(entry.first, "species.")) {
+        } else if (utils::startsWith(entry.first, "species.")) {
             const auto rest = entry.first.substr(8);
             const auto dot = rest.find('.');
             if (dot != std::string::npos) {
@@ -259,7 +218,7 @@ ModelConfig buildModelConfig(const WorldCommand &command, const std::string &mod
     }
 
     for (const auto &entry : command.numeric_params) {
-        if (!startsWith(entry.first, "interaction.")) {
+        if (!utils::startsWith(entry.first, "interaction.")) {
             continue;
         }
         const auto rest = entry.first.substr(12);
@@ -297,14 +256,6 @@ double sumValues(const std::vector<double> &values) {
     return total;
 }
 
-std::uint64_t fnv1a64(const std::string &text) {
-    std::uint64_t hash = 14695981039346656037ull;
-    for (unsigned char ch : text) {
-        hash ^= static_cast<std::uint64_t>(ch);
-        hash *= 1099511628211ull;
-    }
-    return hash;
-}
 } // namespace
 
 SimulationWorld::SimulationWorld(const ModuleInstanceConfig &instance, ModuleContext &context)
@@ -547,9 +498,9 @@ void SimulationWorld::emitTickEvent() {
     event.payload["integrator"] = read_model_.integrator;
     event.payload["energy_total"] = std::to_string(read_model_.energy_total);
     event.payload["checksum"] = read_model_.checksum;
-    event.payload["species"] = joinList(read_model_.species_names);
-    event.payload["species_names"] = joinList(read_model_.species_names);
-    event.payload["flags"] = joinList(read_model_.flags);
+    event.payload["species"] = utils::join(read_model_.species_names);
+    event.payload["species_names"] = utils::join(read_model_.species_names);
+    event.payload["flags"] = utils::join(read_model_.flags);
 
     event.numeric_payload["tick"] = static_cast<double>(read_model_.tick);
     event.numeric_payload["time"] = read_model_.time;
@@ -603,7 +554,7 @@ std::string SimulationWorld::checksum() const {
     canonical << "dynamics=" << dynamics_->checksum();
 
     std::ostringstream output;
-    output << std::hex << fnv1a64(canonical.str());
+    output << std::hex << utils::fnv1a64(canonical.str());
     return output.str();
 }
 
