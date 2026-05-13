@@ -42,6 +42,7 @@ std::string csvEscape(const std::string &value) {
     }
 
     std::string escaped = "\"";
+    escaped.reserve(value.size() + 2 + static_cast<std::size_t>(std::count(value.begin(), value.end(), '"')));
     for (char ch : value) {
         if (ch == '"') {
             escaped += "\"\"";
@@ -108,7 +109,17 @@ std::string getRequiredValue(const SimulationEvent &event, const std::string &co
     return getPayloadString(event, column);
 }
 
-std::vector<std::string> getSpeciesNames(const SimulationEvent &event) {
+const std::vector<std::string> &emptyStringVector() {
+    static const std::vector<std::string> empty;
+    return empty;
+}
+
+const std::vector<double> &emptyDoubleVector() {
+    static const std::vector<double> empty;
+    return empty;
+}
+
+const std::vector<std::string> &getSpeciesNames(const SimulationEvent &event) {
     auto list_it = event.string_list_payload.find("species_names");
     if (list_it != event.string_list_payload.end()) {
         return list_it->second;
@@ -117,10 +128,10 @@ std::vector<std::string> getSpeciesNames(const SimulationEvent &event) {
     if (list_it != event.string_list_payload.end()) {
         return list_it->second;
     }
-    return {};
+    return emptyStringVector();
 }
 
-std::vector<double> getStateVector(const SimulationEvent &event) {
+const std::vector<double> &getStateVector(const SimulationEvent &event) {
     auto vector_it = event.numeric_vector_payload.find("state_vector");
     if (vector_it != event.numeric_vector_payload.end()) {
         return vector_it->second;
@@ -129,7 +140,7 @@ std::vector<double> getStateVector(const SimulationEvent &event) {
     if (vector_it != event.numeric_vector_payload.end()) {
         return vector_it->second;
     }
-    return {};
+    return emptyDoubleVector();
 }
 
 bool hasExtendedPayload(const SimulationEvent &event) {
@@ -230,9 +241,22 @@ std::string RecorderCsv::buildCsvRow(const SimulationEvent &event) const {
         row.push_back(getRequiredValue(event, column));
     }
 
-    const auto species_names = getSpeciesNames(event);
-    const auto state_vector = getStateVector(event);
+    const auto &species_names = getSpeciesNames(event);
+    const auto &state_vector = getStateVector(event);
+    if (state_species_ == species_names) {
+        for (std::size_t i = 0; i < state_species_.size(); ++i) {
+            row.push_back(i < state_vector.size() ? formatDouble(state_vector[i]) : "");
+        }
+        for (const auto &metric : metric_names_) {
+            auto it = event.metrics.find(metric);
+            row.push_back(it != event.metrics.end() ? formatDouble(it->second) : "");
+        }
+
+        return joinCsv(row);
+    }
+
     std::unordered_map<std::string, double> state_by_species;
+    state_by_species.reserve(species_names.size());
     for (std::size_t i = 0; i < species_names.size() && i < state_vector.size(); ++i) {
         state_by_species[species_names[i]] = state_vector[i];
     }

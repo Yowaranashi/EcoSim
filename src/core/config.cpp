@@ -120,18 +120,46 @@ std::string loadFile(const std::string &path) {
     return buffer.str();
 }
 
+std::string stripLineComment(const std::string &line) {
+    bool in_quotes = false;
+    char quote = '\0';
+
+    for (std::size_t i = 0; i < line.size(); ++i) {
+        const char c = line[i];
+        if ((c == '"' || c == '\'') && (i == 0 || line[i - 1] != '\\')) {
+            if (!in_quotes) {
+                in_quotes = true;
+                quote = c;
+            } else if (quote == c) {
+                in_quotes = false;
+            }
+            continue;
+        }
+        if (!in_quotes && c == '#') {
+            return line.substr(0, i);
+        }
+    }
+
+    return line;
+}
+
 std::string removeComments(const std::string &input) {
     std::ostringstream out;
     std::istringstream stream(input);
     std::string line;
     while (std::getline(stream, line)) {
-        auto hash = line.find('#');
-        if (hash != std::string::npos) {
-            line = line.substr(0, hash);
-        }
-        out << line << '\n';
+        out << stripLineComment(line) << '\n';
     }
     return out.str();
+}
+
+std::optional<double> parseDouble(const std::string &value) {
+    try {
+        return std::stod(value);
+    } catch (const std::invalid_argument &) {
+    } catch (const std::out_of_range &) {
+    }
+    return std::nullopt;
 }
 
 std::map<std::string, std::string> parseInlineMap(const std::string &input) {
@@ -199,9 +227,8 @@ std::map<std::string, double> parseNumberTable(const std::string &input, const s
         if (scalar.empty() || scalar.front() == '[' || scalar.front() == '{' || scalar.front() == '"') {
             continue;
         }
-        try {
-            result[key] = std::stod(scalar);
-        } catch (const std::invalid_argument &) {
+        if (auto parsed = parseDouble(scalar)) {
+            result[key] = *parsed;
         }
     }
 
@@ -280,13 +307,13 @@ std::vector<std::map<std::string, std::string>> parseArrayOfTables(const std::st
     if (!content.empty() && content.back() == ']') {
         content.pop_back();
     }
-    bool in_quotes = false;
-    char quote = '\0';
     for (std::size_t pos = 0; pos < content.size();) {
         auto open = content.find('{', pos);
         if (open == std::string::npos) {
             break;
         }
+        bool in_quotes = false;
+        char quote = '\0';
         int depth = 0;
         std::size_t close = std::string::npos;
         for (std::size_t i = open; i < content.size(); ++i) {

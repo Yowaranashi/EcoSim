@@ -124,6 +124,28 @@ stop_at_tick = 1
     details = "invalid model did not throw";
     return false;
 }
+
+bool testHashInsideQuotedValues(std::string &details) {
+    auto path = writeRawScenarioFile("scenario_test_7_hash_in_quotes.toml", R"toml(
+scenario_id = "hash#inside"
+model = "glv"
+species = [
+  { id = "prey#1", initial_state = 10.0 }
+]
+schedule = [
+  { tick = 1, command = "set_param", name = "growth.prey#1", value = 0.5 } # trailing comment
+]
+)toml");
+
+    auto scenario = ecosim::ConfigLoader::loadScenario(path.string());
+    if (scenario.scenario_id != "hash#inside" || scenario.model.species.size() != 1 ||
+        scenario.model.species[0].id != "prey#1" || scenario.schedule.size() != 1 ||
+        scenario.schedule[0].params.at("name") != "growth.prey#1") {
+        details = "quoted # characters were not preserved while stripping comments";
+        return false;
+    }
+    return true;
+}
 } // namespace
 
 class ScenarioParsingTest : public IIntegrationTest {
@@ -132,10 +154,10 @@ public:
         const std::string name = "5.4.7 scenario parsing";
         std::string details;
         if (!testLegacyScenario(details) || !testGlvScenario(details) || !testRosenzweigMacarthurScenario(details) ||
-            !testInvalidModel(details)) {
+            !testInvalidModel(details) || !testHashInsideQuotedValues(details)) {
             return {name, false, details};
         }
-        return {name, true, "legacy, gLV, Rosenzweig-MacArthur and invalid model cases passed"};
+        return {name, true, "legacy, gLV, Rosenzweig-MacArthur, invalid model and quoted # cases passed"};
     }
 };
 

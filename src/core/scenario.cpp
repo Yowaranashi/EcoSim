@@ -1,5 +1,7 @@
 #include "core/scenario.h"
+
 #include <algorithm>
+#include <utility>
 
 namespace ecosim {
 
@@ -9,13 +11,16 @@ ScenarioTimeline::ScenarioTimeline(ScenarioConfig config) : config_(std::move(co
 }
 
 std::vector<ScenarioConfig::ScheduledAction> ScenarioTimeline::actionsForTick(int tick) const {
-    std::vector<ScenarioConfig::ScheduledAction> actions;
-    for (const auto &action : config_.schedule) {
-        if (action.tick == tick) {
-            actions.push_back(action);
-        }
-    }
-    return actions;
+    auto first = std::lower_bound(config_.schedule.begin(), config_.schedule.end(), tick,
+                                  [](const ScenarioConfig::ScheduledAction &action, int value) {
+                                      return action.tick < value;
+                                  });
+    auto last = std::upper_bound(first, config_.schedule.end(), tick,
+                                 [](int value, const ScenarioConfig::ScheduledAction &action) {
+                                     return value < action.tick;
+                                 });
+
+    return {first, last};
 }
 
 } // namespace ecosim
