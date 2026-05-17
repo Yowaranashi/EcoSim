@@ -49,6 +49,12 @@ std::unique_ptr<IIntegrationTest> makeRecorderCsvStableColumnsTest();
 std::unique_ptr<IIntegrationTest> makeGlvExampleTomlToCsvTest();
 std::unique_ptr<IIntegrationTest> makeRmExampleTomlToCsvTest();
 std::unique_ptr<IIntegrationTest> makeCsvResultReaderExtendedCsvTest();
+std::unique_ptr<IIntegrationTest> makeConsoleModeDoesNotAutostartHeadlessTest();
+std::unique_ptr<IIntegrationTest> makeScenarioListAndSimRunSelectionTest();
+std::unique_ptr<IIntegrationTest> makeInvalidScenarioAndOgreCommandsTest();
+std::unique_ptr<IIntegrationTest> makeGlvExtinctionThresholdTest();
+std::unique_ptr<IIntegrationTest> makeEnvironmentalNoiseTest();
+std::unique_ptr<IIntegrationTest> makeSensitivityCsvTest();
 
 std::vector<std::unique_ptr<IIntegrationTest>> buildIntegrationTests() {
     std::vector<std::unique_ptr<IIntegrationTest>> tests;
@@ -97,6 +103,12 @@ std::vector<std::unique_ptr<IIntegrationTest>> buildIntegrationTests() {
     tests.push_back(makeGlvExampleTomlToCsvTest());
     tests.push_back(makeRmExampleTomlToCsvTest());
     tests.push_back(makeCsvResultReaderExtendedCsvTest());
+    tests.push_back(makeConsoleModeDoesNotAutostartHeadlessTest());
+    tests.push_back(makeScenarioListAndSimRunSelectionTest());
+    tests.push_back(makeInvalidScenarioAndOgreCommandsTest());
+    tests.push_back(makeGlvExtinctionThresholdTest());
+    tests.push_back(makeEnvironmentalNoiseTest());
+    tests.push_back(makeSensitivityCsvTest());
     return tests;
 }
 

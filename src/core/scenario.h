@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,7 @@ struct SpeciesConfig {
 
 struct ModelConfig {
     std::string model_id;
+    int seed = 0;
     std::vector<SpeciesConfig> species;
     std::map<std::string, double> initial_state;
     std::map<std::string, double> parameters;
@@ -36,6 +38,8 @@ struct ScenarioDefinition {
     ModelConfig model;
     int seed = 0;
     int stop_at_tick = 0;
+    std::optional<int> log_tick_interval;
+    std::optional<bool> log_tick_details;
     IntegratorConfig integrator;
     std::vector<std::string> requires;
     std::vector<ScheduledAction> schedule;

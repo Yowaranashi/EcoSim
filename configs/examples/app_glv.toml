@@ -1,8 +1,8 @@
 mode = "headless"
 error_policy = "fail-fast"
-modules_dir = "../../modules"
+modules_dir = "modules"
 scenario_path = "glv_three_species_euler.toml"
-output_dir = "../../output/examples"
+output_dir = "output/examples"
 max_ticks = 150
 
 instances = [

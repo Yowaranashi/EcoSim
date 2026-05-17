@@ -3,6 +3,7 @@
 #include "core/utils/toml_parser.h"
 #include "models/model_dynamics_factory.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <optional>
 #include <stdexcept>
@@ -33,6 +34,11 @@ std::optional<int> getInt(const TomlDocument &document, const std::string &key) 
 std::optional<double> getDouble(const TomlDocument &document, const std::string &key) {
     auto value = document.find(key);
     return value ? value->asDouble() : std::nullopt;
+}
+
+std::optional<bool> getBool(const TomlDocument &document, const std::string &key) {
+    auto value = document.find(key);
+    return value ? value->asBool() : std::nullopt;
 }
 
 std::vector<std::string> stringArray(const TomlValue *value) {
@@ -218,11 +224,24 @@ AppConfig ConfigLoader::loadAppConfig(const std::string &path) {
     config.modules_dir = getString(document, "modules_dir", config.modules_dir);
     config.scenario_path = getString(document, "scenario_path", config.scenario_path);
     config.output_dir = getString(document, "output_dir", config.output_dir);
+    config.recorder_output_path = getString(document, "recorder_output_path", config.recorder_output_path);
     if (auto dt = getDouble(document, "dt")) {
         config.dt = *dt;
     }
     if (auto max_ticks = getInt(document, "max_ticks")) {
         config.max_ticks = *max_ticks;
+    }
+    if (auto log_tick_interval = getInt(document, "log_tick_interval")) {
+        config.log_tick_interval = std::max(0, *log_tick_interval);
+    }
+    if (auto log_tick_details = getBool(document, "log_tick_details")) {
+        config.log_tick_details = *log_tick_details;
+    }
+    if (auto ogre_visualization = getBool(document, "ogre_visualization")) {
+        config.ogre_visualization = *ogre_visualization;
+    }
+    if (auto visualization_enabled = getBool(document, "visualization_enabled")) {
+        config.ogre_visualization = *visualization_enabled;
     }
 
     if (auto instances = document.find("instances")) {
@@ -293,11 +312,18 @@ ScenarioConfig ConfigLoader::loadScenario(const std::string &path) {
     if (auto seed = getInt(document, "seed")) {
         scenario.seed = *seed;
     }
+    scenario.model.seed = scenario.seed;
     if (auto dt = getDouble(document, "dt")) {
         scenario.integrator.dt = *dt;
     }
     if (auto stop_at_tick = getInt(document, "stop_at_tick")) {
         scenario.stop_at_tick = *stop_at_tick;
+    }
+    if (auto log_tick_interval = getInt(document, "log_tick_interval")) {
+        scenario.log_tick_interval = std::max(0, *log_tick_interval);
+    }
+    if (auto log_tick_details = getBool(document, "log_tick_details")) {
+        scenario.log_tick_details = *log_tick_details;
     }
     auto integrator = getString(document, "integrator");
     if (!integrator.empty()) {
@@ -321,6 +347,12 @@ ScenarioConfig ConfigLoader::loadScenario(const std::string &path) {
     }
     applyRootOrTableNumberMap(scenario, document, "parameters");
     applyRootOrTableNumberMap(scenario, document, "params");
+    if (auto extinction_threshold = getDouble(document, "extinction_threshold")) {
+        scenario.model.parameters["extinction_threshold"] = *extinction_threshold;
+    }
+    if (auto environmental_noise = getDouble(document, "environmental_noise")) {
+        scenario.model.parameters["environmental_noise"] = *environmental_noise;
+    }
 
     applyMaybeQualifiedMap(scenario.model.parameters, positional_growth, document.find("growth"), "growth");
     applyMaybeQualifiedMap(scenario.model.parameters, positional_growth, document.find("growth_rates"), "growth");

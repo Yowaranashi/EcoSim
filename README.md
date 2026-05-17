@@ -1,181 +1,90 @@
 # EcoSim
 
-EcoSim - модульная headless-система симуляции экосистем на C++17. Проект рассчитан на пакетные прогоны сценариев из TOML, детерминированный tick-loop, запись результатов в CSV и дальнейшее подключение viewer-а, который сможет читать готовые результаты.
+EcoSim is a C++17/CMake ecosystem simulator. The main workflow is headless scenario execution with CSV output. Console mode is available for interactive commands. OGRE viewer is an optional CSV visualization layer and is not part of the simulation logic.
 
-## Что уже есть
+## Build
 
-- Модульная архитектура: `Application`, `ModuleRegistry`, `ModuleManager`, `IModule`.
-- Буферизованный `EventBus`: `emit()` только кладет событие в буфер, `deliverBuffered()` доставляет события после tick-фаз.
-- `SimulationWorld`: хранит состояние мира, выполняет математическую динамику, публикует `world.tick`.
-- `ScenarioRunner`: читает TOML-сценарий и отправляет команды миру.
-- `RecorderCsv`: пишет расширенный `world.tick` в CSV.
-- Отдельный OGRE viewer для воспроизведения CSV-результатов, если проект собран с `ECOSIM_BUILD_OGRE_VIEWER=ON`.
-- Математический слой в `src/models`, отделенный от модулей приложения.
-- Модели:
-  - generalized Lotka-Volterra (`glv`);
-  - Rosenzweig-MacArthur (`rosenzweig_macarthur`, `rm`).
-- Интеграторы:
-  - Euler;
-  - RK4.
-- Интеграционные тесты для конфигурации, EventBus, сценариев, моделей, связи мира с динамикой, CSV и примеров.
-
-## Структура проекта
-
-```text
-EcoSim/
-  CMakeLists.txt
-  CMakePresets.json
-  README.md
-  configs/
-    app.toml
-    scenario.toml
-    examples/
-  docs/
-  modules/
-    */manifest.toml
-    recorder/recorder_csv.dll
-  src/
-    main.cpp
-    core/
-    models/
-    modules/
-  tests/
-    data/
-    integration/
-```
-
-Основные каталоги:
-
-- `src/core` - ядро приложения: конфиги, EventBus, модули, реестр, приложение.
-- `src/models` - чистый вычислительный слой, не зависящий от `Application`, `EventBus`, CSV и OGRE.
-- `src/modules` - runtime-модули: мир, runner сценариев, CSV recorder.
-- `configs` - базовые и демонстрационные TOML-конфиги.
-- `modules` - манифесты модулей и динамическая библиотека recorder-а.
-- `tests/integration` - интеграционный test runner.
-
-## Требования
-
-- CMake 3.16 или новее.
-- CMake 3.21 или новее для `CMakePresets.json`.
-- Компилятор с поддержкой C++17.
-- Windows: Visual Studio/MSVC или другой C++17 toolchain.
-- Linux/macOS: GCC/Clang с C++17.
-
-## Сборка
-
-### Рекомендуемый вариант: CMakePresets
-
-Windows MSVC Debug:
+Standard Release build:
 
 ```powershell
-cmake --preset windows-msvc-debug
-cmake --build --preset build-windows-msvc-debug
-ctest --preset test-windows-msvc-debug --output-on-failure
+cmake -S . -B build_codex
+cmake --build build_codex --config Release
+ctest --test-dir build_codex -C Release --output-on-failure
 ```
 
-Windows MSVC Release:
+Run from the portable build directory:
 
 ```powershell
-cmake --preset windows-msvc-release
-cmake --build --preset build-windows-msvc-release
-ctest --preset test-windows-msvc-release --output-on-failure
+cd build_codex\Release
+.\ecosim.exe configs\app.toml
 ```
 
-NMake Release из Developer PowerShell или Developer Command Prompt:
+Build with OGRE viewer through vcpkg installed in `C:\vcpkg`:
 
 ```powershell
-cmake --preset nmake-release
-cmake --build --preset build-nmake-release
-ctest --preset test-nmake-release --output-on-failure
+cmake -S . -B build_ogre `
+  -DECOSIM_BUILD_OGRE_VIEWER=ON `
+  -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake `
+  -DVCPKG_TARGET_TRIPLET=x64-windows
+
+cmake --build build_ogre --config Release
+ctest --test-dir build_ogre -C Release --output-on-failure
 ```
 
-Если установлен Ninja:
-
-```bash
-cmake --preset ninja-debug
-cmake --build --preset build-ninja-debug
-ctest --preset test-ninja-debug --output-on-failure
-```
-
-### Универсальный вариант
-
-```bash
-cmake -S . -B build
-cmake --build build
-```
-
-### Visual Studio generator
-
-```bash
-cmake -S . -B build -G "Visual Studio 17 2022"
-cmake --build build --config Debug
-```
-
-Для `Release`:
-
-```bash
-cmake --build build --config Release
-```
-
-### NMake на Windows
-
-Команды нужно запускать из Developer PowerShell или Developer Command Prompt, где доступны `cl.exe`, `rc.exe` и `mt.exe`.
+Create an install-style portable directory:
 
 ```powershell
-cmake -S . -B build\nmake_release -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release
-cmake --build build\nmake_release
+cmake --install build_ogre --config Release --prefix build_ogre\portable
 ```
 
-## Запуск проекта
+The build and install output contain the runtime payload next to the executable:
 
-По умолчанию приложение читает `configs/app.toml`:
+- `configs/`
+- `scenarios/`
+- `modules/`
+- `docs/`
+- `README.md`
+- `LICENSE`
+- MSVC runtime DLLs
+- for OGRE builds: `ecosim_ogre_viewer.exe`, OGRE/vcpkg DLLs, `plugins.cfg`, `plugins/ogre/*.dll`
 
-```bash
-./build/ecosim
-```
+OGRE SDK is needed to build the viewer. A different computer does not need the SDK to run the viewer if the portable folder contains the bundled DLLs and plugins.
 
-Или можно передать путь к app-конфигу:
+## Runtime Paths
 
-```bash
-./build/ecosim configs/app.toml
-./build/ecosim configs/examples/app_glv.toml
-./build/ecosim configs/examples/app_rm.toml
-```
+Relative runtime paths are resolved from the runtime root next to the executable. The runtime root is the directory containing `modules/simulation_world/manifest.toml`.
 
-На Windows путь к бинарнику зависит от генератора:
-
-```powershell
-.\build\nmake_release\ecosim.exe configs\examples\app_glv.toml
-.\build\Debug\ecosim.exe configs\examples\app_glv.toml
-```
-
-## Режимы запуска
-
-Режим задается в app TOML:
+Example:
 
 ```toml
-mode = "headless"
+modules_dir = "modules"
+scenario_path = "scenario-gfl.toml"
+output_dir = "output"
 ```
 
-Поддерживаемые значения:
+This means:
 
-- `headless` - сразу выполнить сценарий и завершиться.
-- `console` - запустить интерактивную консоль.
+- modules are loaded from `modules/`
+- scenario is loaded from `scenarios/scenario-gfl.toml`
+- recorder output is written under `output/`
 
-Если указан неизвестный режим, приложение пишет предупреждение и запускается как `headless`.
+The location of the app TOML file does not become the base directory for modules, scenarios, or output. Absolute paths are still supported for compatibility.
 
-## App-конфиг
+## App Config
 
-Пример:
+Default config: `configs/app.toml`.
 
 ```toml
 mode = "headless"
 error_policy = "fail-fast"
-modules_dir = "../modules"
-scenario_path = "scenario.toml"
-output_dir = "../output"
+modules_dir = "modules"
+scenario_path = "scenario-gfl.toml"
+output_dir = "output"
 dt = 1.0
-max_ticks = 100
+max_ticks = 150
+log_tick_interval = 25
+log_tick_details = false
+ogre_visualization = false
 
 instances = [
   { type = "simulation_world", id = "default", enable = true },
@@ -184,103 +93,286 @@ instances = [
 ]
 ```
 
-Конфиги читаются через централизованный TOML-парсер в `src/core/utils/toml_parser.*`. Он поддерживает используемые в MVP формы TOML: строки, числа, bool, массивы, inline tables, массивы inline tables и секции вроде `[parameters]`.
+Fields:
 
-Поля:
+- `mode`: `headless` or `console`
+- `error_policy`: `fail-fast` or `auto-disable`
+- `modules_dir`: module manifest directory
+- `scenario_path`: file name or relative path inside `scenarios/`
+- `output_dir`: CSV and sensitivity output directory
+- `dt`: fallback timestep
+- `max_ticks`: safety limit for the tick loop
+- `log_tick_interval`: console progress interval; `0` disables progress tick logs
+- `log_tick_details`: when `true`, progress logs include per-species state values
+- `recorder_output_path`: optional explicit CSV path for the normal recorder
+- `ogre_visualization`: when `true` in an OGRE build, launch viewer after a simulation run
+- `instances`: runtime modules to start
 
-- `mode` - `headless` или `console`.
-- `error_policy` - `fail-fast` или `auto-disable`.
-- `modules_dir` - каталог с manifest.toml модулей.
-- `scenario_path` - путь к TOML-сценарию.
-- `output_dir` - каталог для результатов.
-- `dt` - fallback timestep приложения.
-- `max_ticks` - верхняя граница tick-loop.
-- `instances` - включенные экземпляры модулей.
+Recommended runtime modules for simulations:
 
-## Консольные команды
+- `simulation_world`
+- `scenario`
+- `recorder`
 
-Команды доступны в режиме:
+## Run Modes
+
+Headless:
+
+```powershell
+.\ecosim.exe configs\app.toml
+```
+
+Console:
 
 ```toml
 mode = "console"
 ```
 
-Список команд:
+Then run:
 
-- `help` - вывести список доступных команд.
-- `module.list` - вывести загруженные модули.
-- `module.start` - команда зарегистрирована, но в MVP не поддерживает динамический старт.
-- `module.stop` - команда зарегистрирована, но в MVP не поддерживает динамическую остановку.
-- `sim.run` - выполнить headless-симуляцию.
-- `sim.start` - синоним `sim.run`.
-- `sim.pause` - no-op в headless MVP.
-- `sim.resume` - no-op в headless MVP.
-- `sys.quit` - завершить консольный цикл и приложение.
-
-## Сценарии
-
-Сценарий описывает seed, модель, интегратор, начальное состояние и расписание команд.
-
-### Старый совместимый формат
-
-```toml
-seed = 42
-stop_at_tick = 5
-requires = ["simulation_world", "recorder"]
-
-schedule = [
-  { tick = 1, command = "spawn", species = "rabbit", count = 3 },
-  { tick = 2, command = "spawn", species = "fox", count = 1 }
-]
+```powershell
+.\ecosim.exe configs\app.toml
 ```
 
-Этот формат продолжает работать. Если математическая модель не задана, мир может использовать legacy-поведение.
+Unknown `mode` logs a warning and falls back to headless.
 
-### gLV сценарий
+## Console Commands
+
+Core:
+
+```text
+help
+module.list
+module.start
+module.stop
+sys.quit
+```
+
+Simulation:
+
+```text
+scenario.list
+sim.run
+sim.run -s scenario-gfl.toml
+sim.run --scenario scenario-rm.toml
+sim.run --output run_glv
+sim.run -s scenario-rm.toml --output rm_run.csv
+sim.pause
+sim.resume
+```
+
+`sim.run` without `-s` uses `scenario_path` from `app.toml`. `sim.run -s` loads the selected file from `scenarios/`. Relative console scenario paths cannot escape `scenarios/` through `../`.
+
+`sim.run --output <name>` changes the normal recorder CSV for that run. If `<name>` has no extension, `.csv` is added. A bare file name is written under `output_dir`; a relative path with directories is resolved from runtime root.
+
+Sensitivity analysis:
+
+```text
+sim.sensitivity -s scenario-rm.toml -p h --from 0.01 --to 1.0 --samples 100 --output sensitivity_h
+```
+
+The CSV is written to:
+
+```text
+output/sensitivity_h.csv
+```
+
+OGRE runtime flag:
+
+```text
+ogre.status
+ogre.enable
+ogre.disable
+```
+
+`ogre.enable` makes the app launch `ecosim_ogre_viewer` after the next completed `sim.run` or headless run. The viewer receives the current recorder CSV path. If `sim.run --output <file>` was used, that file is visualized; otherwise the default `output/simulation.csv` is used. `ogre.disable` turns this off.
+
+## Console Output
+
+EcoSim does not print one line for every tick by default. It prints start, periodic progress, and finish messages.
+
+Example:
+
+```text
+[simulation] Simulation started: scenario=scenario_gfl model=glv integrator=euler dt=0.100 stop_at_tick=100 log_tick_interval=25 log_tick_details=false
+[simulation] Progress: tick=25/100 time=2.500 biomass=122.430 min_population=4.120 checksum=...
+[system] Simulation finished: tick=100 checksum=... output=output/simulation.csv
+```
+
+Control it from app config or scenario:
 
 ```toml
-scenario_id = "glv_three_species_euler"
+log_tick_interval = 50
+log_tick_details = false
+```
+
+Rules:
+
+- `log_tick_interval = 0`: no periodic tick progress
+- `log_tick_interval = 25`: log ticks 25, 50, 75, etc.
+- final stop tick is always reported by the app
+- `log_tick_details = true`: include `state.<species>=...` values in progress lines
+
+## Scenarios
+
+User scenarios live in:
+
+```text
+scenarios/
+```
+
+Example app config:
+
+```toml
+scenario_path = "scenario-gfl.toml"
+```
+
+opens:
+
+```text
+scenarios/scenario-gfl.toml
+```
+
+Common scenario fields:
+
+```toml
+scenario_id = "scenario_gfl"
 model = "glv"
 seed = 42
 dt = 0.1
 stop_at_tick = 100
 integrator = "euler"
+log_tick_interval = 25
+log_tick_details = false
 
+requires = ["simulation_world", "recorder"]
+schedule = []
+```
+
+Fields:
+
+- `scenario_id`: stable id used in CSV and logs
+- `model`: model id
+- `seed`: deterministic random seed
+- `dt`: scenario timestep
+- `stop_at_tick`: simulation stop tick
+- `integrator`: `euler` or `rk4`
+- `log_tick_interval`: scenario override for console progress interval
+- `log_tick_details`: scenario override for per-species progress details
+- `requires`: modules that must be enabled
+- `schedule`: commands applied at specific ticks
+
+## Schedule Commands
+
+`spawn`: add population to a species.
+
+```toml
+schedule = [
+  { tick = 10, command = "spawn", species = "rabbit", count = 5.0 }
+]
+```
+
+For mathematical models, `spawn` applies a positive shock to the target state.
+
+`set_param`: change a model parameter.
+
+```toml
+schedule = [
+  { tick = 50, command = "set_param", name = "growth.rabbit", value = 0.1 }
+]
+```
+
+`apply_shock`: directly change a species state.
+
+```toml
+schedule = [
+  { tick = 20, command = "apply_shock", target = "rabbit", strength = -10.0 }
+]
+```
+
+`stop.at_tick`: change the stop tick from a scenario command.
+
+```toml
+schedule = [
+  { tick = 100, command = "stop.at_tick", value = 100 }
+]
+```
+
+## Models
+
+Supported ids:
+
+- generalized Lotka-Volterra: `glv`, `generalized_lotka_volterra`
+- Rosenzweig-MacArthur: `rm`, `rosenzweig_macarthur`
+
+## Generalized Lotka-Volterra
+
+Formula:
+
+```text
+dX_i/dt = X_i * (r_i + sum_j(a_ij * X_j) + s_i * u_i)
+```
+
+Scenario example:
+
+```toml
+model = "glv"
 species = ["grass", "rabbit", "fox"]
 initial_state = [100.0, 30.0, 5.0]
 growth = [0.4, 0.2, -0.1]
 sensitivity = [1.0, 1.0, 1.0]
+extinction_threshold = 0.1
+environmental_noise = 0.0
 
 interaction_matrix = [
   [-0.01, -0.02,  0.00],
   [ 0.01, -0.01, -0.03],
   [ 0.00,  0.02, -0.01]
 ]
-
-requires = ["simulation_world", "recorder"]
-
-schedule = [
-  { tick = 20, command = "apply_shock", target = "rabbit", strength = -10.0 },
-  { tick = 50, command = "set_param", name = "growth.rabbit", value = 0.1 }
-]
 ```
 
-Формула gLV:
+Parameters:
+
+- `species`: species order
+- `initial_state`: initial state in the same order
+- `growth` or `growth.<species>`: intrinsic growth `r_i`
+- `sensitivity` or `sensitivity.<species>`: sensitivity `s_i`
+- `external_input.<species>`: external input `u_i`
+- `interaction_matrix[i][j]`: influence of species `j` on species `i`
+- `interaction.<species_i>.<species_j>`: scheduled interaction override
+- `extinction_threshold`: default `0.1`; values below it become `0.0`; `0.0` disables hard extinction
+- `environmental_noise`: default `0.0`; reproducible random noise controlled by `seed`
+
+Positive interaction coefficients help the target species grow. Negative coefficients suppress it.
+
+Supported gLV sensitivity parameters:
 
 ```text
-dN_i/dt = N_i * (r_i + sum_j(a_ij * N_j) + b_i * u_i(t))
+growth.<species>
+sensitivity.<species>
+external_input.<species>
+interaction.<species_i>.<species_j>
 ```
 
-### Rosenzweig-MacArthur сценарий
+Example:
+
+```text
+sim.sensitivity -s scenario-gfl.toml -p growth.rabbit --from 0.05 --to 0.3 --samples 20 --output growth_rabbit
+```
+
+## Rosenzweig-MacArthur
+
+Formula:
+
+```text
+dN/dt = r*N*(1 - N/K) - (a*N*P) / (1 + a*h*N)
+dP/dt = e*(a*N*P) / (1 + a*h*N) - m*P
+```
+
+Scenario example:
 
 ```toml
-scenario_id = "rm_predator_prey"
 model = "rosenzweig_macarthur"
-seed = 42
-dt = 0.05
-stop_at_tick = 200
-integrator = "rk4"
-
 species = ["prey", "predator"]
 initial_state = [40.0, 9.0]
 
@@ -291,227 +383,89 @@ a = 0.1
 h = 0.2
 e = 0.5
 m = 0.2
-
-requires = ["simulation_world", "recorder"]
-
-schedule = [
-  { tick = 80, command = "apply_shock", target = "prey", strength = -15.0 }
-]
 ```
 
-Параметры RM:
+Parameters:
 
-- `r` - скорость роста prey.
-- `K` - carrying capacity.
-- `a` - attack rate.
-- `h` - handling time.
-- `e` - conversion efficiency.
-- `m` - predator mortality.
+- `r`: prey growth rate
+- `K`: carrying capacity
+- `a`: predator attack intensity
+- `h`: handling time
+- `e`: prey-to-predator conversion efficiency
+- `m`: predator mortality
 
-## Поддерживаемые model id
+Supported RM sensitivity parameters:
 
-- `glv`
-- `generalized_lotka_volterra`
-- `rosenzweig_macarthur`
-- `rm`
-
-## Поддерживаемые integrator
-
-- `euler`
-- `rk4`
-
-## Команды schedule
-
-Команды выполняет `ScenarioRunner`, а применяет `SimulationWorld`.
-
-### spawn
-
-```toml
-{ tick = 1, command = "spawn", species = "rabbit", count = 3 }
+```text
+r
+K
+a
+h
+e
+m
 ```
 
-Назначение: добавить особей/биомассу виду.
+Example:
 
-Параметры:
-
-- `species` - имя вида.
-- `count` - добавляемое значение.
-
-Для подключенной математической модели команда работает как положительный shock.
-
-### set_param
-
-```toml
-{ tick = 50, command = "set_param", name = "growth.rabbit", value = 0.1 }
+```text
+sim.sensitivity -s scenario-rm.toml -p h --from 0.01 --to 1.0 --samples 100 --output sensitivity_h
 ```
 
-Назначение: изменить параметр модели.
+## CSV Output
 
-Параметры:
+Normal simulation CSV:
 
-- `name` - имя параметра.
-- `value` - новое численное значение.
-
-Для gLV поддерживаются:
-
-- `growth.<species>`
-- `sensitivity.<species>`
-- `interaction.<species_i>.<species_j>`
-- `external_input.<species>`
-
-Для RM поддерживаются:
-
-- `r`, `growth`, `resource_growth`
-- `K`, `carrying_capacity`
-- `a`, `attack_rate`
-- `h`, `handling_time`
-- `e`, `conversion_efficiency`
-- `m`, `mortality`
-
-### apply_shock
-
-```toml
-{ tick = 80, command = "apply_shock", target = "prey", strength = -15.0 }
+```text
+output/simulation.csv
 ```
 
-Назначение: мгновенно изменить состояние вида.
+Important columns:
 
-Параметры:
-
-- `target` - имя вида.
-- `strength` - изменение состояния. Отрицательные значения уменьшают популяцию; состояние clamp-ится к нулю.
-
-### stop.at_tick
-
-Эта команда обычно выставляется автоматически из `stop_at_tick`.
-
-```toml
-{ tick = 0, command = "stop.at_tick", value = 100 }
-```
-
-Назначение: остановить tick-loop при достижении указанного tick.
-
-## CSV вывод
-
-`RecorderCsv` подписывается на `world.tick`.
-
-Для расширенного события CSV содержит:
-
-- `tick`
-- `time`
-- `dt`
-- `scenario_id`
-- `model_id`
-- `seed`
-- `integrator`
-- `checksum`
-- `flags`
+- `tick`, `time`, `dt`
+- `scenario_id`, `model_id`, `seed`, `integrator`
+- `checksum`, `flags`
 - `state.<species>`
 - `metric.<name>`
 
-Пример пути вывода:
+Sensitivity CSV columns include:
 
-```text
-output/examples/simulation.csv
-```
+- `sample_index`
+- `parameter_name`
+- `parameter_value`
+- `scenario_id`
+- `model_id`
+- `seed`
+- `final_tick`
+- `checksum`
+- `state.<species>`
+- `metric.<name>`
 
-Для legacy-событий сохраняется старый CSV формат:
+## OGRE Viewer
 
-```text
-tick,seed,energy_total
-```
-
-## OGRE viewer
-
-Viewer является отдельным исполняемым файлом для просмотра готовых CSV-результатов и не участвует в расчете модели. Основной режим симуляции остается headless, а основной UI - консольным.
-
-Документация: [docs/ogre_viewer.md](docs/ogre_viewer.md)
-
-## Запуск тестов
-
-Все интеграционные тесты собраны в один executable: `ecosim_integration_tests`.
-
-Через пресеты:
+Build:
 
 ```powershell
-cmake --preset windows-msvc-release
-cmake --build --preset build-windows-msvc-release
-ctest --preset test-windows-msvc-release --output-on-failure
+cmake -S . -B build_ogre `
+  -DECOSIM_BUILD_OGRE_VIEWER=ON `
+  -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake `
+  -DVCPKG_TARGET_TRIPLET=x64-windows
+
+cmake --build build_ogre --config Release
 ```
 
-Старый универсальный способ:
-
-```bash
-cmake -S . -B build
-cmake --build build
-ctest --test-dir build --output-on-failure
-```
-
-Для Visual Studio:
-
-```bash
-cmake --build build --config Debug
-ctest --test-dir build -C Debug --output-on-failure
-```
-
-Для NMake build:
+Run simulation first:
 
 ```powershell
-cmake --build build\nmake_release
-ctest --test-dir build\nmake_release --output-on-failure
+cd build_ogre\Release
+.\ecosim.exe configs\app.toml
 ```
 
-Запуск runner напрямую:
-
-```bash
-./build/ecosim_integration_tests
-```
-
-На Windows:
+Run viewer:
 
 ```powershell
-.\build\nmake_release\ecosim_integration_tests.exe
+.\ecosim_ogre_viewer.exe output\simulation.csv
+.\ecosim_ogre_viewer.exe --input output\simulation.csv
+.\ecosim_ogre_viewer.exe --csv output\rm_run.csv
 ```
 
-## CI
-
-GitHub Actions workflow находится в `.github/workflows/cmake.yml`. Он запускается на `push` и `pull_request`, конфигурирует проект через `CMakePresets`, собирает Release-конфигурацию MSVC и запускает `ctest --output-on-failure`.
-
-## Текущие группы тестов
-
-- Dependency resolution.
-- Spawn pre-tick phase.
-- Event buffering.
-- Stop condition.
-- Recorder isolation.
-- Reproducibility.
-- Scenario parsing.
-- World tick contract.
-- Model dynamics base.
-- gLV derivatives/Euler/RK4/Jacobian/set_param/shock/checksum.
-- Rosenzweig-MacArthur derivatives/Euler/RK4/set_param/shock/Jacobian/equilibrium/checksum.
-- Model dynamics factory.
-- SimulationWorld + dynamics.
-- ScenarioRunner end-to-end.
-- RecorderCsv extended output.
-- Example TOML to CSV.
-
-## Установка
-
-```bash
-cmake --install build --prefix install
-```
-
-Для multi-config:
-
-```bash
-cmake --install build --prefix install --config Debug
-```
-
-## Упаковка
-
-```bash
-cmake --build build --target package
-```
-
-CPack собирает ZIP/TGZ с бинарником, конфигами, модулями и документацией.
+The viewer reads extended RecorderCsv output. It does not control `SimulationWorld` or `ScenarioRunner`. After it reaches the last frame, it keeps the final visualization open until the window is closed.

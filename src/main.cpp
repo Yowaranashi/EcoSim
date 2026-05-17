@@ -22,14 +22,15 @@ int main(int argc, char **argv) {
     }
 
     const auto &mode = app.config().mode;
+    bool ok = true;
     if (mode == "console") {
         app.runConsoleLoop();
     } else if (mode == "headless") {
-        app.runHeadless();
+        ok = app.runHeadless();
     } else {
         logger.log(ecosim::LogChannel::System, "Unknown mode '" + mode + "', falling back to headless");
-        app.runHeadless();
+        ok = app.runHeadless();
     }
     app.shutdown();
-    return 0;
+    return ok ? 0 : 1;
 }

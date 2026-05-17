@@ -2,6 +2,7 @@
 
 #include "core/module.h"
 
+#include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -22,6 +23,9 @@ public:
     const std::vector<std::string> &csvLines() const { return csv_lines_; }
 
 private:
+    std::filesystem::path resolveOutputPath() const;
+    void openOutputFile(bool reset_file);
+    bool isFirstTickOfRun(const SimulationEvent &event) const;
     void handleEvent(const SimulationEvent &event);
     void writeCsvForEvent(const SimulationEvent &event);
     void initializeCsvHeader(const SimulationEvent &event);
@@ -33,6 +37,7 @@ private:
     std::string instance_id_;
     ModuleContext &context_;
     std::string output_path_;
+    std::filesystem::path active_output_path_;
     bool memory_only_ = false;
     std::ofstream file_;
     std::vector<SimulationEvent> events_;

@@ -18,18 +18,27 @@ void ScenarioRunner::setAvailableModules(const std::vector<std::string> &modules
 }
 
 void ScenarioRunner::onStart() {
-    auto scenario_path = context_.config().scenario_path;
+    initialized_ = false;
+}
+
+bool ScenarioRunner::loadScenario(const std::filesystem::path &scenario_path) {
+    initialized_ = false;
     if (scenario_path.empty()) {
         context_.logger().log(LogChannel::System, "Scenario path not provided; skipping scenario runner");
-        return;
+        return false;
     }
 
-    ScenarioConfig config = ConfigLoader::loadScenario(scenario_path);
+    ScenarioConfig config;
+    try {
+        config = ConfigLoader::loadScenario(scenario_path.string());
+    } catch (const std::exception &ex) {
+        context_.logger().log(LogChannel::System, std::string("Failed to load scenario: ") + ex.what());
+        return false;
+    }
     for (const auto &required : config.requires) {
         if (available_modules_.find(required) == available_modules_.end()) {
             context_.logger().log(LogChannel::System, "Missing required module for scenario: " + required);
-            initialized_ = false;
-            return;
+            return false;
         }
     }
     
@@ -43,6 +52,13 @@ void ScenarioRunner::onStart() {
         configure.params["model_id"] = config.model.model_id;
         configure.params["integrator"] = config.integrator.type;
         configure.numeric_params["dt"] = config.integrator.dt;
+        if (config.log_tick_interval) {
+            configure.numeric_params["log_tick_interval"] = static_cast<double>(*config.log_tick_interval);
+        }
+        if (config.log_tick_details) {
+            configure.params["log_tick_details"] = *config.log_tick_details ? "true" : "false";
+        }
+        config.model.seed = config.seed;
         configure.model_config = config.model;
         configure.has_model_config = !config.model.model_id.empty() || !config.model.species.empty() ||
                                      !config.model.initial_state.empty() || !config.model.parameters.empty() ||
@@ -50,6 +66,8 @@ void ScenarioRunner::onStart() {
         world_->enqueueCommand(configure);
         world_->enqueueCommand("stop.at_tick", {{"value", std::to_string(config.stop_at_tick)}});
     }
+    context_.logger().log(LogChannel::System, "Scenario loaded: " + scenario_path.string());
+    return true;
 }
 
 void ScenarioRunner::onPreTick() {
@@ -70,6 +88,8 @@ void ScenarioRunner::dispatchAction(const ScenarioConfig::ScheduledAction &actio
         world_->enqueueCommand("set_param", action.params);
     } else if (action.command == "apply_shock") {
         world_->enqueueCommand("apply_shock", action.params);
+    } else if (action.command == "stop.at_tick" || action.command == "stop_at_tick") {
+        world_->enqueueCommand(action.command, action.params);
     } else {
         const std::string message = "Unsupported scenario command: " + action.command;
         if (context_.config().error_policy == ErrorPolicy::FailFast) {

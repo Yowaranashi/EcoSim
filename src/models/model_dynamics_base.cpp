@@ -6,6 +6,7 @@
 #include <cmath>
 #include <iomanip>
 #include <limits>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 
@@ -44,6 +45,20 @@ void ModelDynamicsBase::configure(const ModelConfig &config) {
     state_.clear();
     parameters_ = config.parameters;
     time_ = 0.0;
+    seed_ = config.seed;
+    rng_.seed(static_cast<std::mt19937::result_type>(seed_));
+    extinction_threshold_ = 0.1;
+    environmental_noise_ = 0.0;
+    if (auto threshold = parameters_.find("extinction_threshold"); threshold != parameters_.end()) {
+        if (std::isfinite(threshold->second) && threshold->second >= 0.0) {
+            extinction_threshold_ = threshold->second;
+        }
+    }
+    if (auto noise = parameters_.find("environmental_noise"); noise != parameters_.end()) {
+        if (std::isfinite(noise->second) && noise->second >= 0.0) {
+            environmental_noise_ = noise->second;
+        }
+    }
 
     for (const auto &species : config.species) {
         species_names_.push_back(species.id);
@@ -100,7 +115,18 @@ void ModelDynamicsBase::advanceStep(double dt, IntegrationMethod method) {
         }
     }
 
+    if (environmental_noise_ > 0.0) {
+        std::normal_distribution<double> noise(0.0, environmental_noise_);
+        for (std::size_t i = 0; i < next_state.size() && i < state_.size(); ++i) {
+            if (clampPopulation(state_[i]) > 0.0) {
+                next_state[i] += state_[i] * noise(rng_);
+            }
+        }
+    }
+
+    const auto previous_state = state_;
     state_ = clampState(next_state);
+    afterStateClamped(previous_state, state_);
     time_ += dt;
 }
 
@@ -145,6 +171,10 @@ std::map<std::string, double> ModelDynamicsBase::getMetrics() const {
     return metrics;
 }
 
+std::vector<std::string> ModelDynamicsBase::getFlags() const {
+    return {};
+}
+
 std::string ModelDynamicsBase::checksum() const {
     std::ostringstream canonical;
     canonical << std::setprecision(17);
@@ -161,23 +191,28 @@ std::string ModelDynamicsBase::checksum() const {
     for (const auto &param : parameters_) {
         canonical << param.first << '=' << param.second << ',';
     }
+    canonical << ";extinction_threshold=" << extinction_threshold_;
+    canonical << ";environmental_noise=" << environmental_noise_;
 
     std::ostringstream output;
     output << std::hex << utils::fnv1a64(canonical.str());
     return output.str();
 }
 
-double ModelDynamicsBase::clampPopulation(double value) {
+double ModelDynamicsBase::clampPopulation(double value) const {
     if (!std::isfinite(value)) {
         return 0.0;
     }
     if (value < 0.0 || std::abs(value) < kClampEpsilon) {
         return 0.0;
     }
+    if (extinction_threshold_ > 0.0 && value < extinction_threshold_) {
+        return 0.0;
+    }
     return value;
 }
 
-std::vector<double> ModelDynamicsBase::clampState(const std::vector<double> &state) {
+std::vector<double> ModelDynamicsBase::clampState(const std::vector<double> &state) const {
     std::vector<double> result;
     result.reserve(state.size());
     for (double value : state) {
@@ -185,5 +220,8 @@ std::vector<double> ModelDynamicsBase::clampState(const std::vector<double> &sta
     }
     return result;
 }
+
+void ModelDynamicsBase::afterStateClamped(const std::vector<double> & /*previous_state*/,
+                                          const std::vector<double> & /*next_state*/) {}
 
 } // namespace ecosim

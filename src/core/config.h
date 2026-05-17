@@ -33,9 +33,14 @@ struct AppConfig {
     ErrorPolicy error_policy = ErrorPolicy::FailFast;
     std::vector<ModuleInstanceConfig> instances;
     std::string modules_dir = "modules";
+    std::string runtime_root = "";
     std::string scenario_path = "";
     std::string output_dir = "output";
+    std::string recorder_output_path = "";
     double dt = 1.0;
+    int log_tick_interval = 50;
+    bool log_tick_details = false;
+    bool ogre_visualization = false;
     std::optional<int> max_ticks;
 };
 

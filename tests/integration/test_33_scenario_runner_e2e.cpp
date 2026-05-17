@@ -11,10 +11,7 @@ namespace ecosim_integration {
 
 namespace {
 std::filesystem::path writeRawScenarioFile(const std::string &file_name, const std::string &content) {
-    auto data_dir = repoRoot() / "tests" / "data";
-    if (!std::filesystem::exists(data_dir)) {
-        data_dir = repoRoot() / "data";
-    }
+    auto data_dir = generatedDataDir();
     std::filesystem::create_directories(data_dir);
     auto path = data_dir / file_name;
     std::ofstream file(path, std::ios::out | std::ios::trunc);

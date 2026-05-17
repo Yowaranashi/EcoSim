@@ -1,0 +1,7 @@
+# Defines OGRE plugins bundled with the portable EcoSim viewer.
+
+PluginFolder=plugins/ogre
+
+Plugin=RenderSystem_GL
+Plugin=Codec_STBI
+Plugin=Plugin_OctreeSceneManager

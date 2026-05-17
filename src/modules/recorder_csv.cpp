@@ -165,17 +165,65 @@ RecorderCsv::RecorderCsv(const ModuleInstanceConfig &instance, ModuleContext &co
 }
 
 void RecorderCsv::onStart() {
-    if (!memory_only_) {
-        if (output_path_.empty()) {
-            output_path_ = context_.config().output_dir + "/simulation.csv";
+    openOutputFile(true);
+    context_.eventBus().subscribe("recorder.configure", [this](const SimulationEvent &event) {
+        auto path = event.payload.find("path");
+        if (path != event.payload.end()) {
+            output_path_ = path->second;
+            openOutputFile(true);
         }
-        auto parent_path = std::filesystem::path(output_path_).parent_path();
+    });
+    context_.eventBus().subscribe("world.tick", [this](const SimulationEvent &event) { handleEvent(event); });
+}
+
+std::filesystem::path RecorderCsv::resolveOutputPath() const {
+    std::filesystem::path resolved_output_path;
+    if (!output_path_.empty()) {
+        resolved_output_path = std::filesystem::path(output_path_);
+    } else if (!context_.config().recorder_output_path.empty()) {
+        resolved_output_path = std::filesystem::path(context_.config().recorder_output_path);
+    } else {
+        resolved_output_path = std::filesystem::path(context_.config().output_dir) / "simulation.csv";
+    }
+
+    if (resolved_output_path.is_relative()) {
+        const auto &runtime_root = context_.config().runtime_root;
+        auto base = runtime_root.empty() ? std::filesystem::current_path() : std::filesystem::path(runtime_root);
+        resolved_output_path = base / resolved_output_path;
+    }
+    return resolved_output_path.lexically_normal();
+}
+
+void RecorderCsv::openOutputFile(bool reset_file) {
+    if (file_.is_open()) {
+        file_.close();
+    }
+    if (reset_file) {
+        events_.clear();
+        csv_lines_.clear();
+        csv_header_.clear();
+        state_species_.clear();
+        metric_names_.clear();
+        csv_header_written_ = false;
+        legacy_csv_format_ = false;
+    }
+    if (!memory_only_) {
+        active_output_path_ = resolveOutputPath();
+        output_path_ = active_output_path_.string();
+        auto parent_path = active_output_path_.parent_path();
         if (!parent_path.empty()) {
             std::filesystem::create_directories(parent_path);
         }
-        file_.open(output_path_, std::ios::out | std::ios::trunc);
+        file_.open(active_output_path_, std::ios::out | std::ios::trunc);
     }
-    context_.eventBus().subscribe("world.tick", [this](const SimulationEvent &event) { handleEvent(event); });
+}
+
+bool RecorderCsv::isFirstTickOfRun(const SimulationEvent &event) const {
+    auto tick_it = event.numeric_payload.find("tick");
+    if (tick_it != event.numeric_payload.end()) {
+        return tick_it->second <= 1.0;
+    }
+    return event.tick <= 1;
 }
 
 void RecorderCsv::onStop() {
@@ -185,6 +233,9 @@ void RecorderCsv::onStop() {
 }
 
 void RecorderCsv::handleEvent(const SimulationEvent &event) {
+    if (!events_.empty() && isFirstTickOfRun(event)) {
+        openOutputFile(true);
+    }
     events_.push_back(event);
     writeCsvForEvent(event);
 }
@@ -286,6 +337,7 @@ void RecorderCsv::appendCsvLine(const std::string &line) {
     csv_lines_.push_back(line);
     if (!memory_only_ && file_.is_open()) {
         file_ << line << '\n';
+        file_.flush();
     }
 }
 

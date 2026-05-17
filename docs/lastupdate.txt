@@ -138,7 +138,7 @@ EcoSim: описание файлов проекта и функций
   - void registerCoreCommands()
     Вход: нет.
     Выход: нет.
-    Эффект: регистрирует help, module.list, module.start, module.stop, sim.run, sim.start, sim.pause, sim.resume, sys.quit.
+    Эффект: регистрирует help, module.list, module.start, module.stop, scenario.list, sim.run, sim.sensitivity, sim.pause, sim.resume, ogre.status, ogre.enable, ogre.disable, sys.quit.
 
 
 4. src/core/config.h и src/core/config.cpp
@@ -1281,4 +1281,3 @@ World event:
 
 CSV:
   SimulationEvent world.tick -> RecorderCsv::initializeCsvHeader/buildCsvRow -> output/simulation.csv.
-

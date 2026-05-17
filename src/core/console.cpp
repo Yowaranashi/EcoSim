@@ -10,7 +10,13 @@ void Console::registerCommand(const std::string &name, CommandHandler handler) {
 }
 
 bool Console::execute(const std::string &line) {
-    std::istringstream stream(line);
+    std::string normalized = line;
+    if (normalized.size() >= 3 && static_cast<unsigned char>(normalized[0]) == 0xEF &&
+        static_cast<unsigned char>(normalized[1]) == 0xBB &&
+        static_cast<unsigned char>(normalized[2]) == 0xBF) {
+        normalized.erase(0, 3);
+    }
+    std::istringstream stream(normalized);
     std::string command;
     stream >> command;
     if (command.empty()) {

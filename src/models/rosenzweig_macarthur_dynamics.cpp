@@ -57,6 +57,20 @@ void RosenzweigMacArthurDynamics::configure(const ModelConfig &config) {
 
     parameters_ = config.parameters;
     time_ = 0.0;
+    seed_ = config.seed;
+    rng_.seed(static_cast<std::mt19937::result_type>(seed_));
+    extinction_threshold_ = 0.1;
+    environmental_noise_ = 0.0;
+    if (auto threshold = parameters_.find("extinction_threshold"); threshold != parameters_.end()) {
+        if (std::isfinite(threshold->second) && threshold->second >= 0.0) {
+            extinction_threshold_ = threshold->second;
+        }
+    }
+    if (auto noise = parameters_.find("environmental_noise"); noise != parameters_.end()) {
+        if (std::isfinite(noise->second) && noise->second >= 0.0) {
+            environmental_noise_ = noise->second;
+        }
+    }
     flags_.clear();
 
     r_ = 1.0;
@@ -111,8 +125,8 @@ std::vector<double> RosenzweigMacArthurDynamics::computeDerivatives(
         throw std::runtime_error("Rosenzweig-MacArthur state vector must contain prey and predator");
     }
 
-    const double X = state[0];
-    const double Y = state[1];
+    const double X = clampPopulation(state[0]);
+    const double Y = clampPopulation(state[1]);
     const double denominator = 1.0 + a_ * h_ * X;
     if (std::abs(denominator) < kDenominatorEpsilon) {
         throw std::runtime_error("Rosenzweig-MacArthur functional response denominator is zero");
@@ -177,6 +191,12 @@ std::string RosenzweigMacArthurDynamics::checksum() const {
     }
     canonical << ";params=";
     canonical << "r=" << r_ << ",K=" << K_ << ",a=" << a_ << ",h=" << h_ << ",e=" << e_ << ",m=" << m_;
+    canonical << ";extinction_threshold=" << extinctionThreshold();
+    canonical << ";environmental_noise=" << environmentalNoise();
+    canonical << ";flags=";
+    for (const auto &flag : flags_) {
+        canonical << flag << ',';
+    }
 
     std::ostringstream output;
     output << std::hex << utils::fnv1a64(canonical.str());

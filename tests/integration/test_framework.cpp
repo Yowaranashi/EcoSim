@@ -101,10 +101,15 @@ std::filesystem::path findDataDir() {
 
     return base / "data";
 }
+
 } // namespace
 
 std::filesystem::path repoRoot() {
     return findRuntimeBase();
+}
+
+std::filesystem::path generatedDataDir() {
+    return findRuntimeBase() / "test_generated" / "data";
 }
 
 std::filesystem::path writeScenarioFile(const std::string &file_name,
@@ -112,7 +117,7 @@ std::filesystem::path writeScenarioFile(const std::string &file_name,
                                         int stop_at_tick,
                                         const std::vector<std::string> &requires,
                                         const std::vector<std::map<std::string, std::string>> &schedule) {
-    auto data_dir = findDataDir();
+    auto data_dir = generatedDataDir();
     std::filesystem::create_directories(data_dir);
     auto path = data_dir / file_name;
     std::ofstream file(path, std::ios::out | std::ios::trunc);
@@ -153,17 +158,16 @@ std::filesystem::path writeAppConfigFile(const std::string &file_name,
                                          const std::filesystem::path &scenario_path,
                                          int max_ticks,
                                          const std::vector<std::map<std::string, std::string>> &instances) {
-    auto base = findRuntimeBase();
-    auto data_dir = findDataDir();
+    auto data_dir = generatedDataDir();
     std::filesystem::create_directories(data_dir);
     auto path = data_dir / file_name;
     std::ofstream file(path, std::ios::out | std::ios::trunc);
 
     file << "mode = \"headless\"\n";
     file << "error_policy = \"fail-fast\"\n";
-    file << "modules_dir = \"" << (base / "modules").generic_string() << "\"\n";
+    file << "modules_dir = \"modules\"\n";
     file << "scenario_path = \"" << scenario_path.generic_string() << "\"\n";
-    file << "output_dir = \"" << (base / "output").generic_string() << "\"\n";
+    file << "output_dir = \"output\"\n";
     file << "dt = 1.0\n";
     file << "max_ticks = " << max_ticks << "\n";
 

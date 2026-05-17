@@ -1,0 +1,28 @@
+scenario_id = "scenario_gfl"
+model = "glv"
+seed = 42
+dt = 0.1
+stop_at_tick = 100
+integrator = "euler"
+log_tick_interval = 25
+log_tick_details = false
+extinction_threshold = 0.1
+environmental_noise = 0.0
+
+species = ["grass", "rabbit", "fox"]
+initial_state = [100.0, 30.0, 5.0]
+growth = [0.4, 0.2, -0.1]
+sensitivity = [1.0, 1.0, 1.0]
+
+interaction_matrix = [
+  [-0.01, -0.02,  0.00],
+  [ 0.01, -0.01, -0.03],
+  [ 0.00,  0.02, -0.01]
+]
+
+requires = ["simulation_world", "recorder"]
+
+schedule = [
+  { tick = 20, command = "apply_shock", target = "rabbit", strength = -10.0 },
+  { tick = 50, command = "set_param", name = "growth.rabbit", value = 0.1 }
+]

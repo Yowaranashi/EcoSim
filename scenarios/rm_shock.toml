@@ -1,0 +1,25 @@
+scenario_id = "rm_shock"
+model = "rosenzweig_macarthur"
+seed = 42
+dt = 0.05
+stop_at_tick = 200
+integrator = "rk4"
+environmental_noise = 0.0
+
+species = ["prey", "predator"]
+initial_state = [40.0, 9.0]
+
+[parameters]
+r = 1.0
+K = 100.0
+a = 0.1
+h = 0.2
+e = 0.5
+m = 0.2
+
+requires = ["simulation_world", "recorder"]
+
+schedule = [
+  { tick = 80, command = "apply_shock", target = "prey", strength = -15.0 },
+  { tick = 120, command = "set_param", name = "K", value = 80.0 }
+]

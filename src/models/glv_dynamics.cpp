@@ -76,6 +76,7 @@ void GlvDynamics::configure(const ModelConfig &config) {
     for (const auto &param : config.parameters) {
         applyKnownParameter(param.first, param.second);
     }
+    markExtinctions({}, state_);
 }
 
 std::vector<double> GlvDynamics::computeDerivatives(const std::vector<double> &state, double /*time*/) const {
@@ -83,13 +84,18 @@ std::vector<double> GlvDynamics::computeDerivatives(const std::vector<double> &s
         throw std::runtime_error("gLV state vector size does not match species count");
     }
 
+    const auto effective_state = clampState(state);
     std::vector<double> derivatives(state.size(), 0.0);
     for (std::size_t i = 0; i < state.size(); ++i) {
+        if (effective_state[i] <= 0.0) {
+            derivatives[i] = 0.0;
+            continue;
+        }
         double rate = growth_[i] + sensitivity_[i] * external_input_[i];
         for (std::size_t j = 0; j < state.size(); ++j) {
-            rate += interaction_matrix_[i][j] * state[j];
+            rate += interaction_matrix_[i][j] * effective_state[j];
         }
-        derivatives[i] = state[i] * rate;
+        derivatives[i] = effective_state[i] * rate;
     }
     return derivatives;
 }
@@ -106,7 +112,9 @@ void GlvDynamics::applyShock(const std::string &target, double strength) {
         return;
     }
 
+    const auto previous_state = state_;
     state_[*index] = clampPopulation(state_[*index] + strength);
+    markExtinctions(previous_state, state_);
     flags_.push_back("shock_applied:" + target);
 }
 
@@ -122,6 +130,8 @@ std::map<std::string, double> GlvDynamics::getMetrics() const {
         metrics["biomass_total"] += state_[i];
         metrics["min_population"] = std::min(metrics["min_population"], state_[i]);
         metrics["max_population"] = std::max(metrics["max_population"], state_[i]);
+        metrics["extinction." + species_names_[i]] = state_[i] == 0.0 ? 1.0 : 0.0;
+        metrics["extinct_species_count"] += state_[i] == 0.0 ? 1.0 : 0.0;
         if (state_[i] > state_[static_cast<std::size_t>(metrics["dominant_species_index"])]) {
             metrics["dominant_species_index"] = static_cast<double>(i);
         }
@@ -156,6 +166,16 @@ std::string GlvDynamics::checksum() const {
     canonical << ";sensitivity=";
     for (double value : sensitivity_) {
         canonical << value << ',';
+    }
+    canonical << ";external_input=";
+    for (double value : external_input_) {
+        canonical << value << ',';
+    }
+    canonical << ";extinction_threshold=" << extinctionThreshold();
+    canonical << ";environmental_noise=" << environmentalNoise();
+    canonical << ";flags=";
+    for (const auto &flag : flags_) {
+        canonical << flag << ',';
     }
 
     std::ostringstream output;
@@ -280,6 +300,27 @@ void GlvDynamics::resizeParameters(std::size_t species_count) {
     external_input_.assign(species_count, 0.0);
     interaction_matrix_.assign(species_count, std::vector<double>(species_count, 0.0));
     flags_.clear();
+}
+
+void GlvDynamics::afterStateClamped(const std::vector<double> &previous_state,
+                                    const std::vector<double> &next_state) {
+    markExtinctions(previous_state, next_state);
+}
+
+void GlvDynamics::markExtinctions(const std::vector<double> &previous_state,
+                                  const std::vector<double> &next_state) {
+    for (std::size_t i = 0; i < next_state.size() && i < species_names_.size(); ++i) {
+        const bool was_active = previous_state.empty() || (i < previous_state.size() && previous_state[i] > 0.0);
+        if (was_active && next_state[i] == 0.0) {
+            pushFlagOnce("extinction." + species_names_[i]);
+        }
+    }
+}
+
+void GlvDynamics::pushFlagOnce(const std::string &flag) {
+    if (std::find(flags_.begin(), flags_.end(), flag) == flags_.end()) {
+        flags_.push_back(flag);
+    }
 }
 
 } // namespace ecosim

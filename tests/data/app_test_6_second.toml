@@ -1,8 +1,8 @@
 mode = "headless"
 error_policy = "fail-fast"
-modules_dir = "C:/Users/Colorful/Documents/GitHub/EcoSim/modules"
-scenario_path = "C:/Users/Colorful/Documents/GitHub/EcoSim/tests/data/scenario_test_6_second.toml"
-output_dir = "C:/Users/Colorful/Documents/GitHub/EcoSim/output"
+modules_dir = "modules"
+scenario_path = "scenario_test_6_second.toml"
+output_dir = "output"
 dt = 1.0
 max_ticks = 10
 instances = [

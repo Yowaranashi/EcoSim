@@ -1,0 +1,23 @@
+scenario_id = "scenario_glv_euler"
+seed = 42
+model = "glv"
+integrator = "euler"
+dt = 0.1
+stop_at_tick = 100
+extinction_threshold = 0.1
+environmental_noise = 0.0
+requires = ["simulation_world", "recorder"]
+
+species = ["rabbit", "fox"]
+initial_state = [40.0, 9.0]
+growth_rates = [0.8, -0.6]
+
+interaction_matrix = [
+  [-0.01, -0.05],
+  [ 0.02, -0.01]
+]
+
+schedule = [
+  { tick = 30, command = "apply_shock", target = "rabbit", value = -10.0 },
+  { tick = 60, command = "set_param", name = "growth.rabbit", value = 0.5 }
+]

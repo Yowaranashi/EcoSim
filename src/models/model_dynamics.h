@@ -37,6 +37,8 @@ public:
 
     virtual std::map<std::string, double> getMetrics() const = 0;
 
+    virtual std::vector<std::string> getFlags() const { return {}; }
+
     virtual std::string checksum() const = 0;
 };
 

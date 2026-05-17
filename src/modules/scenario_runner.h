@@ -4,6 +4,7 @@
 #include "core/scenario.h"
 #include "modules/world_port.h"
 
+#include <filesystem>
 #include <set>
 
 namespace ecosim {
@@ -17,6 +18,7 @@ public:
 
     void onStart() override;
     void onPreTick() override;
+    bool loadScenario(const std::filesystem::path &scenario_path);
 
     void setWorld(IWorldPort *world) { world_ = world; }
     void setAvailableModules(const std::vector<std::string> &modules);

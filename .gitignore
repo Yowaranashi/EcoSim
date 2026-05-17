@@ -39,9 +39,19 @@
 
 # Build artifacts
 /build/
+/build_codex/
+/build_ogre/
+/build_ogre_vcpkg/
 /output/
+/test_generated/
 build/
 /install/
+
+# Integration-test generated app configs
+/tests/data/app_test_45_console.toml
+/tests/data/app_test_46_console_run.toml
+/tests/data/app_test_47_console_invalid.toml
+/tests/data/app_test_50_sensitivity.toml
 
 # debug information files
 *.dwo

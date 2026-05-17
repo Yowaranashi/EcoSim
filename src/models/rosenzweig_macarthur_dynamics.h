@@ -14,11 +14,11 @@ public:
     void setParameter(const std::string &name, double value) override;
     void applyShock(const std::string &target, double strength) override;
     std::map<std::string, double> getMetrics() const override;
+    std::vector<std::string> getFlags() const override { return flags_; }
     std::string checksum() const override;
 
     std::array<std::array<double, 2>, 2> jacobian2x2() const;
     std::optional<std::vector<double>> equilibriumCandidate() const;
-    const std::vector<std::string> &getFlags() const { return flags_; }
 
 private:
     void applyKnownParameter(const std::string &name, double value);

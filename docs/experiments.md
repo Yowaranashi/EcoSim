@@ -5,7 +5,7 @@ application config, loads modules, runs a scenario and writes CSV through `Recor
 
 ## Demo Scenarios
 
-The `configs/examples` directory contains ready examples:
+The `scenarios/` directory contains ready scenarios:
 
 - `scenario_glv_euler.toml`: two-species gLV with Euler;
 - `scenario_glv_rk4.toml`: the same gLV setup with RK4;
@@ -15,10 +15,13 @@ The `configs/examples` directory contains ready examples:
   comparison scenarios;
 - `rm_predator_prey.toml` and `rm_shock.toml`: additional predator-prey examples.
 
-If the application config accepts only one scenario path, set `scenario_path` in
-`configs/app.toml` or copy one example path into an app config. Ready app configs are also
-available: `app_glv_euler.toml`, `app_glv_rk4.toml`, `app_rm_rk4.toml`, `app_glv_shock.toml`,
-`app_glv.toml` and `app_rm.toml`.
+`scenario_path` in an app config is interpreted as a file name under `scenarios/` in the
+runtime root next to the executable. Relative `modules_dir`, `output_dir` and recorder
+paths use the same runtime root instead of the directory that happens to contain the app
+config.
+Ready app configs remain in `configs/examples`: `app_glv_euler.toml`, `app_glv_rk4.toml`,
+`app_rm_rk4.toml`, `app_glv_shock.toml`, `app_glv.toml` and `app_rm.toml`.
+In console mode, use `scenario.list`, `sim.run`, or `sim.run -s scenario-rm.toml`.
 
 ## Running
 
@@ -80,3 +83,12 @@ Use `scenario_rm_rk4.toml` to plot predator-prey phase dynamics: `state.prey` ag
 
 Use `scenario_glv_shock.toml` to demonstrate scenario control: a shock changes state at a
 specific tick, and `set_param` changes model behavior later in the run.
+
+Use sensitivity analysis for parameter sweeps:
+
+```powershell
+sim.sensitivity -s scenario-rm.toml -p h --from 0.01 --to 1.0 --samples 100 --output sensitivity_h
+```
+
+The output is written to `output_dir/sensitivity_h.csv` and includes final state and metrics
+for each sample.

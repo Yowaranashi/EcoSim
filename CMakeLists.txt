@@ -101,6 +101,9 @@ add_executable(ecosim_integration_tests
     tests/integration/test_34_recorder_csv_extended.cpp
     tests/integration/test_35_examples_toml_to_csv.cpp
     tests/integration/test_36_csv_result_reader.cpp
+    tests/integration/test_37_app_console_scenarios.cpp
+    tests/integration/test_38_extinction_noise.cpp
+    tests/integration/test_39_sensitivity.cpp
 )
 target_link_libraries(ecosim_integration_tests PRIVATE ecosim_core recorder_csv_static ecosim_models ecosim_viewer_csv)
 target_include_directories(ecosim_integration_tests PRIVATE ${CMAKE_SOURCE_DIR}/tests)
@@ -113,6 +116,8 @@ if(ECOSIM_BUILD_OGRE_VIEWER)
     find_package(OGRE QUIET)
 
     if(OGRE_FOUND)
+        target_compile_definitions(ecosim_core PUBLIC ECOSIM_OGRE_VIEWER_AVAILABLE=1)
+
         add_executable(ecosim_ogre_viewer
             src/viewer/main_ogre_viewer.cpp
             src/viewer/ogre_ecosystem_viewer.cpp
@@ -135,6 +140,36 @@ if(ECOSIM_BUILD_OGRE_VIEWER)
         if(OGRE_LIBRARIES)
             target_link_libraries(ecosim_ogre_viewer PRIVATE ${OGRE_LIBRARIES})
         endif()
+
+        configure_file(
+            "${CMAKE_SOURCE_DIR}/cmake/ogre_plugins.cfg.in"
+            "${CMAKE_BINARY_DIR}/ogre_plugins.cfg"
+            COPYONLY
+        )
+
+        if(OGRE_PLUGIN_DIR)
+            add_custom_command(TARGET ecosim_ogre_viewer POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${OGRE_PLUGIN_DIR}"
+                    "$<TARGET_FILE_DIR:ecosim_ogre_viewer>/plugins/ogre"
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${CMAKE_BINARY_DIR}/ogre_plugins.cfg"
+                    "$<TARGET_FILE_DIR:ecosim_ogre_viewer>/plugins.cfg"
+                VERBATIM
+            )
+        endif()
+
+        if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
+            set(ECOSIM_VCPKG_BIN_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin")
+            if(EXISTS "${ECOSIM_VCPKG_BIN_DIR}")
+                add_custom_command(TARGET ecosim_ogre_viewer POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_directory
+                        "${ECOSIM_VCPKG_BIN_DIR}"
+                        "$<TARGET_FILE_DIR:ecosim_ogre_viewer>"
+                    VERBATIM
+                )
+            endif()
+        endif()
     else()
         message(WARNING "OGRE not found: ecosim_ogre_viewer will not be built")
     endif()
@@ -147,6 +182,48 @@ if(CMAKE_CONFIGURATION_TYPES)
     message(STATUS "Multi-config generator detected; use --config <cfg> for ctest and install (e.g. Debug).")
 endif()
 
+function(ecosim_copy_runtime_payload target_name)
+    add_custom_command(TARGET ${target_name} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/configs"
+            "$<TARGET_FILE_DIR:${target_name}>/configs"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/scenarios"
+            "$<TARGET_FILE_DIR:${target_name}>/scenarios"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/modules"
+            "$<TARGET_FILE_DIR:${target_name}>/modules"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/docs"
+            "$<TARGET_FILE_DIR:${target_name}>/docs"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/README.md"
+            "$<TARGET_FILE_DIR:${target_name}>/README.md"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/LICENSE"
+            "$<TARGET_FILE_DIR:${target_name}>/LICENSE"
+        VERBATIM
+    )
+
+    foreach(runtime_file IN LISTS CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+        add_custom_command(TARGET ${target_name} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${runtime_file}"
+                "$<TARGET_FILE_DIR:${target_name}>"
+            VERBATIM
+        )
+    endforeach()
+endfunction()
+
+add_dependencies(ecosim recorder_csv)
+add_dependencies(ecosim_integration_tests recorder_csv)
+ecosim_copy_runtime_payload(ecosim)
+ecosim_copy_runtime_payload(ecosim_integration_tests)
+
+if(TARGET ecosim_ogre_viewer)
+    ecosim_copy_runtime_payload(ecosim_ogre_viewer)
+endif()
+
 install(TARGETS ecosim
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
@@ -155,10 +232,31 @@ if(TARGET ecosim_ogre_viewer)
     install(TARGETS ecosim_ogre_viewer
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
+    if(OGRE_PLUGIN_DIR)
+        install(DIRECTORY "${OGRE_PLUGIN_DIR}/"
+            DESTINATION ${CMAKE_INSTALL_BINDIR}/plugins/ogre
+            FILES_MATCHING PATTERN "*.dll"
+        )
+        install(FILES "${CMAKE_BINARY_DIR}/ogre_plugins.cfg"
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+            RENAME plugins.cfg
+        )
+    endif()
+    if(DEFINED ECOSIM_VCPKG_BIN_DIR AND EXISTS "${ECOSIM_VCPKG_BIN_DIR}")
+        install(DIRECTORY "${ECOSIM_VCPKG_BIN_DIR}/"
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+            FILES_MATCHING PATTERN "*.dll"
+        )
+    endif()
 endif()
 
 install(DIRECTORY configs/
     DESTINATION ${CMAKE_INSTALL_BINDIR}/configs
+)
+
+install(DIRECTORY scenarios/
+    DESTINATION ${CMAKE_INSTALL_BINDIR}/scenarios
+    OPTIONAL
 )
 
 install(DIRECTORY modules/

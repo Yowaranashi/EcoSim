@@ -26,6 +26,18 @@ bool hasNumberParam(const WorldCommand &command, const std::string &name) {
            command.params.find(name) != command.params.end();
 }
 
+bool getBoolParam(const WorldCommand &command, const std::string &name, bool fallback = false) {
+    auto it = command.params.find(name);
+    if (it == command.params.end()) {
+        return fallback;
+    }
+    auto value = it->second;
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return value == "true" || value == "1" || value == "yes" || value == "on";
+}
+
 double getNumberParam(const WorldCommand &command, const std::string &name, double fallback = 0.0) {
     auto numeric_it = command.numeric_params.find(name);
     if (numeric_it != command.numeric_params.end()) {
@@ -256,6 +268,50 @@ double sumValues(const std::vector<double> &values) {
     return total;
 }
 
+std::string formatMetric(double value) {
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(3) << value;
+    return out.str();
+}
+
+std::string shortChecksum(const std::string &checksum) {
+    return checksum.size() > 12 ? checksum.substr(0, 12) : checksum;
+}
+
+double metricOrFallback(const ReadModel &model, const std::string &name, double fallback) {
+    auto it = model.metrics.find(name);
+    return it != model.metrics.end() ? it->second : fallback;
+}
+
+std::string compactStateSummary(const ReadModel &model) {
+    std::ostringstream out;
+    const auto count = std::min(model.species_names.size(), model.state_vector.size());
+    for (std::size_t i = 0; i < count; ++i) {
+        if (i != 0) {
+            out << ' ';
+        }
+        out << "state." << model.species_names[i] << '=' << formatMetric(model.state_vector[i]);
+    }
+    return out.str();
+}
+
+std::string compactFlagsSummary(const ReadModel &model) {
+    std::ostringstream out;
+    bool first = true;
+    for (const auto &flag : model.flags) {
+        if (flag.rfind("extinction.", 0) != 0 && flag.rfind("shock.", 0) != 0 &&
+            flag.rfind("spawn.", 0) != 0 && flag.rfind("param_changed.", 0) != 0) {
+            continue;
+        }
+        if (!first) {
+            out << ',';
+        }
+        first = false;
+        out << flag;
+    }
+    return out.str();
+}
+
 } // namespace
 
 SimulationWorld::SimulationWorld(const ModuleInstanceConfig &instance, ModuleContext &context)
@@ -267,6 +323,10 @@ void SimulationWorld::onInit() {
     read_model_.dt = dt_;
     seed_ = 0;
     stop_at_tick_ = -1;
+    log_tick_interval_ = std::max(0, context_.config().log_tick_interval);
+    log_tick_details_ = context_.config().log_tick_details;
+    simulation_configured_ = false;
+    start_logged_ = false;
     scenario_id_.clear();
     model_id_.clear();
     integrator_.clear();
@@ -291,6 +351,7 @@ void SimulationWorld::onPreTick() {
     }
     pending_commands_.clear();
     updateReadModel();
+    logSimulationStartIfNeeded();
 }
 
 void SimulationWorld::onTick() {
@@ -320,9 +381,14 @@ void SimulationWorld::applyCommand(const WorldCommand &command) {
         dt_ = context_.config().dt;
         read_model_.dt = dt_;
         stop_at_tick_ = -1;
+        log_tick_interval_ = std::max(0, context_.config().log_tick_interval);
+        log_tick_details_ = context_.config().log_tick_details;
+        simulation_configured_ = false;
+        start_logged_ = false;
         scenario_id_.clear();
         model_id_.clear();
         integrator_.clear();
+        integration_method_ = IntegrationMethod::Euler;
         flags_.clear();
         params_.clear();
         species_order_.clear();
@@ -350,10 +416,15 @@ void SimulationWorld::applyCommand(const WorldCommand &command) {
         if (hasNumberParam(command, "dt")) {
             dt_ = getNumberParam(command, "dt", dt_);
         }
+        if (hasNumberParam(command, "log_tick_interval")) {
+            log_tick_interval_ = std::max(0, static_cast<int>(std::lround(getNumberParam(command, "log_tick_interval"))));
+        }
+        log_tick_details_ = getBoolParam(command, "log_tick_details", log_tick_details_);
 
         dynamics_.reset();
         if (!model_id_.empty() && isSupportedModelId(model_id_)) {
             auto config = buildModelConfig(command, model_id_);
+            config.seed = seed_;
             if (hasUsableDynamicsConfig(command, config)) {
                 try {
                     dynamics_ = createModelDynamics(model_id_);
@@ -368,6 +439,8 @@ void SimulationWorld::applyCommand(const WorldCommand &command) {
                 }
             }
         }
+        simulation_configured_ = true;
+        start_logged_ = false;
     } else if (command.command == "stop.at_tick" || command.command == "stop_at_tick") {
         if (hasNumberParam(command, "value")) {
             stop_at_tick_ = static_cast<int>(getNumberParam(command, "value"));
@@ -436,6 +509,11 @@ void SimulationWorld::updateReadModel() {
     read_model_.state_vector = dynamics_->getStateVector();
     read_model_.metrics = dynamics_->getMetrics();
     read_model_.flags = flags_;
+    for (const auto &flag : dynamics_->getFlags()) {
+        if (std::find(read_model_.flags.begin(), read_model_.flags.end(), flag) == read_model_.flags.end()) {
+            read_model_.flags.push_back(flag);
+        }
+    }
 
     read_model_.population_by_species.clear();
     for (std::size_t i = 0; i < read_model_.species_names.size() && i < read_model_.state_vector.size(); ++i) {
@@ -528,9 +606,65 @@ void SimulationWorld::emitTickEvent() {
     }
 
     context_.eventBus().emit(event);
-    context_.logger().log(LogChannel::Simulation,
-                          "Tick " + std::to_string(read_model_.tick) + " population=" +
-                              std::to_string(read_model_.population_by_species.size()));
+    logTickProgress();
+}
+
+void SimulationWorld::logSimulationStartIfNeeded() {
+    if (!simulation_configured_ || start_logged_ || read_model_.model_id.empty()) {
+        return;
+    }
+
+    std::ostringstream message;
+    message << "Simulation started: scenario=" << read_model_.scenario_id
+            << " model=" << read_model_.model_id
+            << " integrator=" << read_model_.integrator
+            << " dt=" << formatMetric(read_model_.dt);
+    if (stop_at_tick_ >= 0) {
+        message << " stop_at_tick=" << stop_at_tick_;
+    }
+    message << " log_tick_interval=" << log_tick_interval_
+            << " log_tick_details=" << (log_tick_details_ ? "true" : "false");
+
+    context_.logger().log(LogChannel::Simulation, message.str());
+    start_logged_ = true;
+}
+
+void SimulationWorld::logTickProgress() const {
+    if (log_tick_interval_ <= 0 && !shouldStop()) {
+        return;
+    }
+    if (log_tick_interval_ > 0 && read_model_.tick % log_tick_interval_ != 0 && !shouldStop()) {
+        return;
+    }
+
+    const double biomass = metricOrFallback(read_model_, "biomass_total",
+                                            sumValues(read_model_.state_vector));
+    const double min_population = metricOrFallback(read_model_, "min_population", 0.0);
+    std::ostringstream message;
+    message << "Progress: tick=" << read_model_.tick;
+    if (stop_at_tick_ > 0) {
+        message << "/" << stop_at_tick_;
+    }
+    message << " time=" << formatMetric(read_model_.time)
+            << " biomass=" << formatMetric(biomass)
+            << " min_population=" << formatMetric(min_population);
+
+    auto flags = compactFlagsSummary(read_model_);
+    if (!flags.empty()) {
+        message << " flags=" << flags;
+    }
+
+    if (log_tick_details_) {
+        auto state = compactStateSummary(read_model_);
+        if (!state.empty()) {
+            message << " " << state;
+        }
+    }
+
+    if (!read_model_.checksum.empty()) {
+        message << " checksum=" << shortChecksum(read_model_.checksum);
+    }
+    context_.logger().log(LogChannel::Simulation, message.str());
 }
 
 bool SimulationWorld::shouldStop() const {

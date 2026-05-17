@@ -122,6 +122,18 @@ void addLine(Ogre::ManualObject &object, const Ogre::Vector3 &from, const Ogre::
     object.position(to);
 }
 
+void addCross(Ogre::ManualObject &object, const Ogre::Vector3 &center, float radius) {
+    addLine(object,
+            Ogre::Vector3(center.x - radius, center.y, center.z),
+            Ogre::Vector3(center.x + radius, center.y, center.z));
+    addLine(object,
+            Ogre::Vector3(center.x, center.y - radius, center.z),
+            Ogre::Vector3(center.x, center.y + radius, center.z));
+    addLine(object,
+            Ogre::Vector3(center.x, center.y, center.z - radius),
+            Ogre::Vector3(center.x, center.y, center.z + radius));
+}
+
 } // namespace
 
 struct OgreEcosystemViewer::Impl {
@@ -206,7 +218,7 @@ struct OgreEcosystemViewer::Impl {
     }
 
     void createScene() {
-        scene = root->createSceneManager(Ogre::ST_GENERIC);
+        scene = root->createSceneManager();
         scene->setAmbientLight(Ogre::ColourValue(0.35f, 0.35f, 0.38f));
 
         auto *light = scene->createLight("EcoSimKeyLight");
@@ -335,6 +347,18 @@ struct OgreEcosystemViewer::Impl {
             }
         }
 
+        while (window && !window->isClosed()) {
+            Ogre::WindowEventUtilities::messagePump();
+            const auto now = std::chrono::steady_clock::now();
+            const std::chrono::duration<double> elapsed = now - last_render;
+            last_render = now;
+            renderShockEffects(elapsed.count());
+            if (!root->renderOneFrame()) {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
+        }
+
         std::cout << std::endl;
     }
 
@@ -360,9 +384,6 @@ struct OgreEcosystemViewer::Impl {
             << metricOrStateSum(frame, "biomass_total") << " checksum=" << frame.checksum;
 
         const auto text = out.str();
-        if (window) {
-            window->setDebugText(text);
-        }
         std::cout << '\r' << text << "        " << std::flush;
     }
 
@@ -402,45 +423,26 @@ struct OgreEcosystemViewer::Impl {
     void updateGlvMap(const SimulationFrame &frame) {
         ensureSpeciesVisuals(frame);
         glv_surface->clear();
+        glv_surface->begin("ecosim.viewer.trajectory", Ogre::RenderOperation::OT_LINE_LIST);
 
-        const double sigma = 18.0;
-        const float half = (static_cast<float>(kGridSize) - 1.0f) * kCellSpacing * 0.5f;
+        const float base_radius = kGridSize * kCellSpacing * 0.42f;
+        addLine(*glv_surface, Ogre::Vector3(-base_radius, 0.0f, 0.0f), Ogre::Vector3(base_radius, 0.0f, 0.0f));
+        addLine(*glv_surface, Ogre::Vector3(0.0f, 0.0f, -base_radius), Ogre::Vector3(0.0f, 0.0f, base_radius));
 
-        for (int gx = 0; gx < kGridSize; ++gx) {
-            for (int gz = 0; gz < kGridSize; ++gz) {
-                const float center_x = static_cast<float>(gx) * kCellSpacing - half;
-                const float center_z = static_cast<float>(gz) * kCellSpacing - half;
-                const auto cell_pos = Ogre::Vector3(center_x, 0.0f, center_z);
-
-                double total_density = 0.0;
-                double best_contribution = -std::numeric_limits<double>::infinity();
-                std::size_t dominant = frame.species_names.size();
-
-                for (std::size_t i = 0; i < frame.species_names.size() && i < frame.state_values.size(); ++i) {
-                    auto anchor = anchors.find(frame.species_names[i]);
-                    if (anchor == anchors.end()) {
-                        continue;
-                    }
-
-                    const auto delta = cell_pos - anchor->second;
-                    const double distance_sq = delta.x * delta.x + delta.z * delta.z;
-                    const double contribution = std::max(0.0, frame.state_values[i]) * std::exp(-distance_sq / sigma);
-                    total_density += contribution;
-                    if (contribution > best_contribution) {
-                        best_contribution = contribution;
-                        dominant = i;
-                    }
-                }
-
-                const float height = static_cast<float>(std::min(5.0, 0.06 + total_density * glv_height_scale));
-                const auto material = dominant < species_materials.size() ? species_materials[dominant]
-                                                                          : std::string("ecosim.viewer.neutral");
-                const float pad = kCellSpacing * 0.47f;
-                glv_surface->begin(material, Ogre::RenderOperation::OT_TRIANGLE_LIST);
-                addBox(*glv_surface, center_x - pad, center_x + pad, center_z - pad, center_z + pad, 0.0f, height);
-                glv_surface->end();
+        for (std::size_t i = 0; i < frame.species_names.size() && i < frame.state_values.size(); ++i) {
+            auto anchor = anchors.find(frame.species_names[i]);
+            if (anchor == anchors.end()) {
+                continue;
             }
+
+            const float height =
+                static_cast<float>(std::min(8.0, std::max(0.0, frame.state_values[i]) * glv_height_scale));
+            const Ogre::Vector3 top(anchor->second.x, height, anchor->second.z);
+            addLine(*glv_surface, Ogre::Vector3::ZERO, anchor->second);
+            addLine(*glv_surface, anchor->second, top);
+            addCross(*glv_surface, top, 0.22f);
         }
+        glv_surface->end();
     }
 
     void updateRosenzweigMacArthurView(const SimulationFrame &frame) {
@@ -451,7 +453,9 @@ struct OgreEcosystemViewer::Impl {
                                          static_cast<float>(values.second * rm_scale_z));
 
         rm_trajectory->clear();
-        rm_trajectory->begin("ecosim.viewer.trajectory", Ogre::RenderOperation::OT_LINE_STRIP);
+        rm_trajectory->begin("ecosim.viewer.trajectory", Ogre::RenderOperation::OT_LINE_LIST);
+        bool has_previous = false;
+        Ogre::Vector3 previous = Ogre::Vector3::ZERO;
         for (std::size_t i = 0; frames && i <= current_frame_index && i < frames->size(); ++i) {
             const auto &past = (*frames)[i];
             if (!isRmModel(past)) {
@@ -459,29 +463,30 @@ struct OgreEcosystemViewer::Impl {
             }
             const auto past_values = preyPredatorValues(past);
             const double past_time = past.time > 0.0 ? past.time : static_cast<double>(past.tick);
-            rm_trajectory->position(static_cast<float>(past_values.first * rm_scale_x),
-                                    static_cast<float>(past_time * rm_scale_y),
-                                    static_cast<float>(past_values.second * rm_scale_z));
+            const Ogre::Vector3 point(static_cast<float>(past_values.first * rm_scale_x),
+                                      static_cast<float>(past_time * rm_scale_y),
+                                      static_cast<float>(past_values.second * rm_scale_z));
+            if (has_previous) {
+                addLine(*rm_trajectory, previous, point);
+            }
+            previous = point;
+            has_previous = true;
         }
         rm_trajectory->end();
 
         rm_current->clear();
-        rm_current->begin("ecosim.viewer.current", Ogre::RenderOperation::OT_TRIANGLE_LIST);
-        addBox(*rm_current,
-               current_rm_point.x - 0.18f,
-               current_rm_point.x + 0.18f,
-               current_rm_point.z - 0.18f,
-               current_rm_point.z + 0.18f,
-               current_rm_point.y - 0.18f,
-               current_rm_point.y + 0.18f);
+        rm_current->begin("ecosim.viewer.current", Ogre::RenderOperation::OT_LINE_LIST);
+        addCross(*rm_current, current_rm_point, 0.35f);
         rm_current->end();
 
         rm_bars->clear();
-        rm_bars->begin("ecosim.viewer.prey", Ogre::RenderOperation::OT_TRIANGLE_LIST);
-        addBox(*rm_bars, -2.5f, -1.7f, -1.0f, -0.2f, 0.0f, static_cast<float>(values.first * rm_scale_x));
-        rm_bars->end();
-        rm_bars->begin("ecosim.viewer.predator", Ogre::RenderOperation::OT_TRIANGLE_LIST);
-        addBox(*rm_bars, -1.3f, -0.5f, -1.0f, -0.2f, 0.0f, static_cast<float>(values.second * rm_scale_z));
+        rm_bars->begin("ecosim.viewer.prey", Ogre::RenderOperation::OT_LINE_LIST);
+        addLine(*rm_bars,
+                Ogre::Vector3(-2.5f, 0.0f, -1.0f),
+                Ogre::Vector3(-2.5f, static_cast<float>(values.first * rm_scale_x), -1.0f));
+        addLine(*rm_bars,
+                Ogre::Vector3(-1.5f, 0.0f, -1.0f),
+                Ogre::Vector3(-1.5f, static_cast<float>(values.second * rm_scale_z), -1.0f));
         rm_bars->end();
     }
 

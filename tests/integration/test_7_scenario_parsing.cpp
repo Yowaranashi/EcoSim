@@ -10,10 +10,7 @@ namespace ecosim_integration {
 
 namespace {
 std::filesystem::path writeRawScenarioFile(const std::string &file_name, const std::string &content) {
-    auto data_dir = repoRoot() / "tests" / "data";
-    if (!std::filesystem::exists(data_dir)) {
-        data_dir = repoRoot() / "data";
-    }
+    auto data_dir = generatedDataDir();
     std::filesystem::create_directories(data_dir);
     auto path = data_dir / file_name;
     std::ofstream file(path, std::ios::out | std::ios::trunc);
@@ -45,6 +42,8 @@ seed = 123
 dt = 0.25
 stop_at_tick = 10
 integrator = "rk4"
+log_tick_interval = 5
+log_tick_details = true
 species = [
   { id = "prey", initial_state = 20.0, parameters = { growth_rate = 1.1 } },
   { id = "predator", initial_state = 5.0, parameters = { mortality = 0.4 } }
@@ -65,6 +64,8 @@ schedule = [
     if (scenario.scenario_id != "glv-basic" || scenario.model.model_id != "glv" ||
         scenario.integrator.type != "rk4" || scenario.integrator.dt != 0.25 || scenario.model.species.size() != 2 ||
         scenario.model.initial_state.at("prey") != 20.0 ||
+        !scenario.log_tick_interval || *scenario.log_tick_interval != 5 ||
+        !scenario.log_tick_details || !*scenario.log_tick_details ||
         scenario.model.species[0].parameters.at("growth_rate") != 1.1 ||
         scenario.model.parameters.at("carrying_capacity") != 100.0 ||
         scenario.model.interaction_matrix.size() != 2 || scenario.model.interaction_matrix[1][0] != 0.05 ||

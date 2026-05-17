@@ -24,6 +24,7 @@ public:
 };
 
 std::filesystem::path repoRoot();
+std::filesystem::path generatedDataDir();
 std::filesystem::path writeScenarioFile(const std::string &file_name,
                                         int seed,
                                         int stop_at_tick,

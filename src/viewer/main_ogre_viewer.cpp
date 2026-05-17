@@ -3,15 +3,38 @@
 
 #include <algorithm>
 #include <iostream>
+#include <optional>
 #include <string>
+#include <vector>
 
 int main(int argc, char **argv) {
-    const std::string csv_path = argc > 1 ? argv[1] : "output/simulation.csv";
+    std::optional<std::string> csv_path;
+    std::vector<std::string> args(argv + 1, argv + argc);
+    for (std::size_t i = 0; i < args.size(); ++i) {
+        if (args[i] == "--help" || args[i] == "-h") {
+            std::cout << "Usage: ecosim_ogre_viewer [output/simulation.csv]\n"
+                      << "       ecosim_ogre_viewer --input <csv>\n"
+                      << "       ecosim_ogre_viewer --csv <csv>\n";
+            return 0;
+        }
+        if (args[i] == "--input" || args[i] == "--csv" || args[i] == "--file" || args[i] == "-i") {
+            if (i + 1 >= args.size()) {
+                std::cerr << args[i] << " requires a CSV path" << std::endl;
+                return 1;
+            }
+            csv_path = args[++i];
+            continue;
+        }
+        if (!args[i].empty() && args[i][0] != '-') {
+            csv_path = args[i];
+        }
+    }
+    const std::string selected_csv_path = csv_path.value_or("output/simulation.csv");
 
     ecosim::viewer::CsvResultReader reader;
-    const auto frames = reader.read(csv_path);
+    const auto frames = reader.read(selected_csv_path);
     if (frames.empty()) {
-        std::cerr << "No frames loaded from " << csv_path << std::endl;
+        std::cerr << "No frames loaded from " << selected_csv_path << std::endl;
         return 1;
     }
 

@@ -35,7 +35,8 @@ Where:
 
 The model supports any number of species, named components, initial state, growth rates,
 interaction matrix, parameter updates and shocks. Its metrics include `biomass_total`,
-`species_count`, `dominant_species_index`, `min_population` and `max_population`.
+`species_count`, `dominant_species_index`, `min_population`, `max_population`,
+`extinct_species_count` and `extinction.<species>`.
 
 Useful parameter names:
 
@@ -43,6 +44,16 @@ Useful parameter names:
 - `sensitivity.rabbit`;
 - `external_input.rabbit`;
 - `interaction.rabbit.fox`.
+
+`extinction_threshold` defaults to `0.1`. After each numerical step, negative values are
+clamped to zero and values below the threshold become exactly zero. A species at zero has
+zero derivative and zero interaction contribution, so it cannot resurrect without an explicit
+`spawn` or positive `apply_shock`. Set `extinction_threshold = 0.0` to keep only the old
+clamp-to-zero behavior.
+
+`environmental_noise` defaults to `0.0`. When positive, the common dynamics base applies a
+reproducible multiplicative perturbation after the deterministic step and before clamp /
+extinction. The random generator is seeded from `seed`, so fixed seeds reproduce trajectories.
 
 ## Rosenzweig-MacArthur
 
@@ -67,6 +78,10 @@ The implementation validates finite, non-negative rates and positive carrying ca
 Metrics include `prey`, `predator`, `biomass_total`, `predation_flow`, `phase_x` and
 `phase_y`.
 
+`environmental_noise` is supported through the same common post-step layer as gLV. The
+state is still clamped after noise, so noise cannot leave negative populations in the
+published read model.
+
 ## Integrators
 
 The common base class provides deterministic Euler and classical RK4 stepping.
@@ -87,5 +102,6 @@ k4 = f(y + dt*k3, t + dt)
 y_next = y + dt * (k1 + 2*k2 + 2*k3 + k4) / 6
 ```
 
-After each step, negative and near-zero negative state values are clamped to zero. The
-checksum is based on deterministic FNV-1a hashing of canonical model and world state data.
+After each step, negative and near-zero state values are clamped to zero, optional
+environmental noise is applied, and the extinction threshold is enforced. The checksum is
+based on deterministic FNV-1a hashing of canonical model and world state data.

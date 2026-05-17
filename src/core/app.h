@@ -7,7 +7,10 @@
 #include "core/module_manager.h"
 #include "core/module_registry.h"
 
+#include <filesystem>
+#include <optional>
 #include <string>
+#include <vector>
 
 namespace ecosim {
 
@@ -18,7 +21,7 @@ public:
 
     bool initialize(const std::string &config_path);
     bool startModules();
-    void runHeadless();
+    bool runHeadless();
     void runConsoleLoop();
     void shutdown();
 
@@ -27,9 +30,30 @@ public:
     EventBus &eventBus() { return event_bus_; }
     const AppConfig &config() const { return app_config_; }
     Console &console() { return console_; }
+    const std::filesystem::path &scenariosDir() const { return scenarios_dir_; }
+    std::filesystem::path expectedRecorderCsvPath() const;
 
 private:
+    struct ScenarioPathResult {
+        bool ok = false;
+        std::filesystem::path path;
+        std::string error;
+    };
+
     void registerCoreCommands();
+    ScenarioPathResult resolveScenarioPath(const std::string &scenario_path,
+                                           bool allow_existing_relative_fallback) const;
+    bool prepareScenario(const std::string &scenario_path,
+                         bool allow_existing_relative_fallback);
+    bool runSimulationLoop();
+    bool executeSimRun(const std::vector<std::string> &args);
+    bool executeSensitivity(const std::vector<std::string> &args);
+    std::filesystem::path resolveRunOutputPath(const std::string &output_arg) const;
+    void configureRecorderOutput(const std::filesystem::path &path);
+    void launchOgreViewer(const std::filesystem::path &csv_path) const;
+    void listScenarios() const;
+    void logOgreStatus() const;
+    void setOgreRuntimeEnabled(bool enabled);
 
     Logger &logger_;
     EventBus event_bus_;
@@ -40,6 +64,12 @@ private:
     Console console_;
     bool running_ = false;
     bool console_running_ = false;
+    bool ogre_runtime_enabled_ = false;
+    std::filesystem::path config_path_;
+    std::filesystem::path config_dir_;
+    std::filesystem::path runtime_root_;
+    std::filesystem::path scenarios_dir_;
+    std::filesystem::path default_recorder_output_path_;
 };
 
 } // namespace ecosim

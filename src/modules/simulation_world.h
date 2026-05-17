@@ -36,6 +36,8 @@ private:
     void updateReadModel();
     void syncLegacyDerivedState();
     void emitTickEvent();
+    void logSimulationStartIfNeeded();
+    void logTickProgress() const;
     std::string legacyChecksum() const;
 
     std::string type_id_;
@@ -50,6 +52,10 @@ private:
     double dt_ = 1.0;
     int seed_ = 0;
     int stop_at_tick_ = -1;
+    int log_tick_interval_ = 50;
+    bool log_tick_details_ = false;
+    bool simulation_configured_ = false;
+    bool start_logged_ = false;
     std::string scenario_id_;
     std::string model_id_;
     std::string integrator_;
