@@ -113,9 +113,13 @@ set_tests_properties(ecosim_integration_tests PROPERTIES WORKING_DIRECTORY ${CMA
 option(ECOSIM_BUILD_OGRE_VIEWER "Build OGRE result viewer" OFF)
 
 if(ECOSIM_BUILD_OGRE_VIEWER)
-    find_package(OGRE QUIET)
+    find_package(OGRE CONFIG QUIET)
 
-    if(OGRE_FOUND)
+    if(NOT OGRE_FOUND)
+        find_package(Ogre CONFIG QUIET)
+    endif()
+
+    if(OGRE_FOUND OR Ogre_FOUND)
         target_compile_definitions(ecosim_core PUBLIC ECOSIM_OGRE_VIEWER_AVAILABLE=1)
 
         add_executable(ecosim_ogre_viewer
@@ -125,9 +129,10 @@ if(ECOSIM_BUILD_OGRE_VIEWER)
 
         target_include_directories(ecosim_ogre_viewer PRIVATE src)
         target_link_libraries(ecosim_ogre_viewer PRIVATE ecosim_viewer_csv)
-		if(MSVC)
-			target_compile_options(ecosim_ogre_viewer PRIVATE /utf-8)
-		endif()
+
+        if(MSVC)
+            target_compile_options(ecosim_ogre_viewer PRIVATE /utf-8)
+        endif()
         
 		if(TARGET OGRE::OgreMain)
             target_link_libraries(ecosim_ogre_viewer PRIVATE OGRE::OgreMain)
