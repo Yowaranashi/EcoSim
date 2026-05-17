@@ -125,8 +125,11 @@ if(ECOSIM_BUILD_OGRE_VIEWER)
 
         target_include_directories(ecosim_ogre_viewer PRIVATE src)
         target_link_libraries(ecosim_ogre_viewer PRIVATE ecosim_viewer_csv)
-
-        if(TARGET OGRE::OgreMain)
+		if(MSVC)
+			target_compile_options(ecosim_ogre_viewer PRIVATE /utf-8)
+		endif()
+        
+		if(TARGET OGRE::OgreMain)
             target_link_libraries(ecosim_ogre_viewer PRIVATE OGRE::OgreMain)
         elseif(TARGET OgreMain)
             target_link_libraries(ecosim_ogre_viewer PRIVATE OgreMain)

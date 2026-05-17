@@ -1,0 +1,10 @@
+EcoSimUIFont
+{
+    type truetype
+    source consola.ttf
+    size 20
+    resolution 96
+
+    code_points 33-126
+    code_points 1024-1279
+}
