@@ -468,4 +468,13 @@ Run viewer:
 .\ecosim_ogre_viewer.exe --csv output\rm_run.csv
 ```
 
-The viewer reads extended RecorderCsv output. It does not control `SimulationWorld` or `ScenarioRunner`. After it reaches the last frame, it keeps the final visualization open until the window is closed.
+The viewer reads extended RecorderCsv output. It does not control `SimulationWorld` or `ScenarioRunner`. The main screen is a 2D time-series chart: X is `Time` or `Tick`, Y is `Population / Biomass`, and every `state.<species>` column is drawn as a stable colored line. The chart includes grid lines, axis labels, numeric ticks, a current-tick marker, current value markers, a legend, and an info panel with scenario/model/tick/time/checksum/metrics/flags.
+
+Controls:
+
+- `Space`: pause/resume.
+- `Right` / `Left`: next/previous tick.
+- `Up` / `Down`: playback speed.
+- `R`: reset to first tick and redraw the graph from the beginning.
+
+After it reaches the last frame, it keeps the final visualization open until the window is closed.

@@ -4,6 +4,7 @@
 #include "core/utils/string_utils.h"
 
 #include <algorithm>
+#include <iostream>
 #include <fstream>
 #include <string>
 #include <utility>
@@ -11,12 +12,21 @@
 namespace ecosim::viewer {
 
 namespace {
-double parseDoubleOr(const std::string &value, double fallback) {
+double parseCsvDouble(const std::string &value,
+                      const std::string &column,
+                      std::size_t row_index,
+                      double fallback = 0.0) {
     const auto cleaned = utils::trim(value);
     if (cleaned.empty()) {
         return fallback;
     }
-    return utils::parseDoubleOr(cleaned, fallback);
+    auto parsed = utils::parseDouble(cleaned);
+    if (!parsed) {
+        std::cerr << "Warning: cannot parse numeric CSV value at row " << row_index << ", column " << column
+                  << ": '" << value << "', using 0.0" << std::endl;
+        return fallback;
+    }
+    return *parsed;
 }
 
 std::vector<std::string> splitFlags(const std::string &value) {
@@ -148,9 +158,9 @@ std::vector<SimulationFrame> CsvResultReader::read(const std::string &path) cons
         }
 
         SimulationFrame frame;
-        frame.tick = static_cast<int>(parseDoubleOr(columnValue(row, "tick"), 0.0));
-        frame.time = parseDoubleOr(columnValue(row, "time"), 0.0);
-        frame.dt = parseDoubleOr(columnValue(row, "dt"), 0.0);
+        frame.tick = static_cast<int>(parseCsvDouble(columnValue(row, "tick"), "tick", row_index));
+        frame.time = parseCsvDouble(columnValue(row, "time"), "time", row_index);
+        frame.dt = parseCsvDouble(columnValue(row, "dt"), "dt", row_index);
         frame.scenario_id = columnValue(row, "scenario_id");
         frame.model_id = columnValue(row, "model_id");
         frame.integrator = columnValue(row, "integrator");
@@ -161,13 +171,15 @@ std::vector<SimulationFrame> CsvResultReader::read(const std::string &path) cons
         frame.state_values.reserve(state_columns.size());
         for (const auto &column : state_columns) {
             frame.species_names.push_back(column.second);
-            frame.state_values.push_back(parseDoubleOr(valueAt(row, column.first), 0.0));
+            const double value = parseCsvDouble(valueAt(row, column.first), "state." + column.second, row_index);
+            frame.state_values.push_back(value);
+            frame.state_by_species[column.second] = value;
         }
 
         for (const auto &column : metric_columns) {
             const auto value = valueAt(row, column.first);
             if (!utils::trim(value).empty()) {
-                frame.metrics[column.second] = parseDoubleOr(value, 0.0);
+                frame.metrics[column.second] = parseCsvDouble(value, "metric." + column.second, row_index);
             }
         }
 

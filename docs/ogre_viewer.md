@@ -1,96 +1,78 @@
 # OGRE Viewer
 
-OGRE Viewer является отдельным демонстрационным слоем визуализации результатов симуляции. Он не является основным пользовательским интерфейсом и не содержит логики расчета модели. Управление приложением остается консольным, а основной режим выполнения симуляции - headless batch-run.
+OGRE Viewer является отдельным слоем просмотра CSV-результатов. Он не считает модель, не подключается к `SimulationWorld`, не управляет `ScenarioRunner` и не меняет состояние симуляции.
 
-Viewer читает CSV-файл, сформированный модулем `RecorderCsv`, и воспроизводит последовательность тиков в отдельном 3D-окне. Viewer не подключается к `SimulationWorld`, не управляет `ScenarioRunner`, не меняет состояние модели и не записывает изменения обратно в CSV.
+## Запуск
 
-В интерактивной консоли доступны команды:
+Viewer читает расширенный CSV от `RecorderCsv` с колонками `state.<species>`:
 
-- `ogre.status` - показывает, собран ли viewer, включен ли runtime-флаг визуализации и какой CSV ожидается.
-- `ogre.enable` - включает runtime-флаг, если viewer доступен в сборке.
-- `ogre.disable` - выключает runtime-флаг.
+```powershell
+.\ecosim_ogre_viewer.exe output\simulation.csv
+.\ecosim_ogre_viewer.exe --input output\simulation.csv
+.\ecosim_ogre_viewer.exe --csv output\rm_run.csv
+```
 
-Эти команды не запускают отдельный процесс viewer и не добавляют расчетную зависимость от OGRE.
+В console mode можно включить автоматический запуск после симуляции:
+
+```text
+ogre.enable
+sim.run -s scenario-rm.toml --output rm_run
+```
+
+Если указан `sim.run --output <name>`, viewer получает именно этот CSV. Иначе используется стандартный `output/simulation.csv`.
+
+## Что отображается
+
+Главный экран viewer-а - 2D-график изменения состояния видов во времени:
+
+- X axis: `Time`, если в CSV есть ненулевой `time`; иначе `Tick`;
+- Y axis: `Population / Biomass`;
+- отдельная цветная линия для каждого `state.<species>`;
+- общая шкала Y для всех видов, чтобы значения можно было сравнивать;
+- сетка по отметкам 0/25/50/75/100%;
+- вертикальный marker текущего tick;
+- маленькие маркеры текущего значения на каждой линии.
+
+Справа отображаются:
+
+- `Scenario`, `Model`, `Integrator`;
+- текущий `Tick`, `Time`, номер кадра, скорость и checksum;
+- текущие значения всех species;
+- текущие metrics;
+- активные flags;
+- legend с текущим и максимальным значением каждого species.
+
+Для Rosenzweig-MacArthur дополнительно выводится небольшой phase plot `Prey`/`Predator`, если в CSV есть species `prey` и `predator`.
+
+## Управление
+
+- `Space`: pause/resume.
+- `Right arrow`: следующий tick.
+- `Left arrow`: предыдущий tick.
+- `Up`: увеличить скорость.
+- `Down`: уменьшить скорость.
+- `R`: сброс к первому tick и очистка уже прорисованной траектории.
+
+После последнего кадра viewer остается открытым, пока окно не будет закрыто.
 
 ## Сборка
 
 По умолчанию viewer не собирается, поэтому основной `ecosim` и тесты не зависят от OGRE:
 
-```bash
+```powershell
 cmake -S . -B build
-cmake --build build
+cmake --build build --config Release
 ```
 
-Чтобы собрать viewer, включите опцию:
+Сборка с OGRE через vcpkg:
 
-```bash
-cmake -S . -B build_ogre -DECOSIM_BUILD_OGRE_VIEWER=ON
-cmake --build build_ogre
+```powershell
+cmake -S . -B build_ogre_vcpkg `
+  -DECOSIM_BUILD_OGRE_VIEWER=ON `
+  -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake `
+  -DVCPKG_TARGET_TRIPLET=x64-windows
+
+cmake --build build_ogre_vcpkg --config Release
 ```
 
-Если OGRE не найден, CMake выведет предупреждение и не будет создавать `ecosim_ogre_viewer`. Основная сборка проекта при этом не должна ломаться.
-
-## Запуск
-
-Сначала выполните обычный headless-прогон, чтобы получить CSV:
-
-```bash
-./build/ecosim configs/examples/app_glv.toml
-```
-
-Затем запустите viewer:
-
-```bash
-./build_ogre/ecosim_ogre_viewer output/simulation.csv
-```
-
-Если путь к CSV не передан, viewer пробует открыть путь относительно runtime-root рядом с exe:
-
-```text
-output/simulation.csv
-```
-
-Viewer ожидает расширенный CSV с колонками `state.<species>`. Для legacy CSV вида `tick,seed,energy_total` он завершится с понятным сообщением, потому что в таком файле нет состояния видов для визуализации.
-
-## Что отображается
-
-Для generalized Lotka-Volterra состояние многовидовой системы проецируется на условную пространственную карту. Используется сетка 20x20. У каждого вида есть anchor-точка, распределенная по окружности вокруг центра карты. Текущее значение `state.<species>` задает силу влияния вида.
-
-Высота клетки соответствует суммарной плотности/биомассе:
-
-```text
-contribution_i = state_i * exp(-distance_to_anchor_i^2 / sigma)
-total_density = sum(contribution_i)
-```
-
-Материал клетки показывает доминирующий вид в этой области визуальной проекции. Это аналитическая визуализация состояния модели, а не пространственная физическая модель.
-
-Для Rosenzweig-MacArthur отображается фазовая траектория в координатах:
-
-- `X = prey`
-- `Z = predator`
-- `Y = time` или `tick`
-
-Текущая точка движется по траектории. Рядом отображаются две небольшие колонки prey/predator как вспомогательные индикаторы текущего состояния.
-
-События `apply_shock`, записанные в `flags` как `shock.<target>`, отображаются как кратковременные визуальные импульсы. Для gLV импульс появляется рядом с anchor-точкой вида, а для неизвестной цели - в центре визуализации.
-
-## Информация о кадре
-
-Viewer выводит текущие данные кадра в debug text окна OGRE и в консоль:
-
-- `tick`
-- `model_id`
-- `integrator`
-- `scenario_id`
-- `biomass_total`
-- `checksum`
-
-## Ограничения
-
-- Viewer не моделирует физическое движение животных.
-- Viewer не выполняет pathfinding, collision physics или реалистичный terrain.
-- Viewer не влияет на расчет и не меняет состояние симуляции.
-- Viewer не является полноценным GUI: без меню, кнопок и редактора сценариев.
-- Визуальная карта gLV является аналитической проекцией состояния модели.
-- Основной режим работы EcoSim остается headless, а основной UI остается консольным.
+Если OGRE не найден, CMake выводит предупреждение и не создает `ecosim_ogre_viewer`; основная сборка не должна ломаться.
